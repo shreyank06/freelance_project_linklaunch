@@ -8,7 +8,6 @@ import {
   type Document, type InsertDocument,
   type JobListing, type InsertJobListing,
 } from "@shared/schema";
-import { randomUUID } from "crypto";
 
 export interface IStorage {
   // User sessions
@@ -47,194 +46,132 @@ export interface IStorage {
   seedJobListings(): Promise<void>;
 }
 
-export class MemStorage implements IStorage {
-  private sessions: Map<string, UserSession>;
-  private skillMaps: Map<string, SkillMap>;
-  private resumes: Map<string, Resume>;
-  private atsAnalyses: Map<string, AtsAnalysis>;
-  private linkedinProfiles: Map<string, LinkedinProfile>;
-  private interviewSessions: Map<string, InterviewSession>;
-  private documents: Map<string, Document>;
-  private jobListings: Map<string, JobListing>;
+// MemStorage class removed - using DatabaseStorage instead
 
+import { db } from "./db";
+import { eq } from "drizzle-orm";
+import {
+  userSessions, skillMaps, resumes, atsAnalyses, linkedinProfiles,
+  interviewSessions, documents, jobListings
+} from "@shared/schema";
+
+export class DatabaseStorage implements IStorage {
   constructor() {
-    this.sessions = new Map();
-    this.skillMaps = new Map();
-    this.resumes = new Map();
-    this.atsAnalyses = new Map();
-    this.linkedinProfiles = new Map();
-    this.interviewSessions = new Map();
-    this.documents = new Map();
-    this.jobListings = new Map();
-    
-    // Seed initial job listings
+    // Seed job listings on startup
     this.seedJobListings();
   }
 
   // User sessions
   async createSession(insertSession: InsertUserSession): Promise<UserSession> {
-    const id = randomUUID();
-    const session: UserSession = {
-      id,
-      ...insertSession,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    this.sessions.set(id, session);
+    const [session] = await db.insert(userSessions).values(insertSession).returning();
     return session;
   }
 
   async getSession(id: string): Promise<UserSession | undefined> {
-    return this.sessions.get(id);
+    const [session] = await db.select().from(userSessions).where(eq(userSessions.id, id));
+    return session || undefined;
   }
 
   async updateSession(id: string, data: Partial<InsertUserSession>): Promise<UserSession | undefined> {
-    const session = this.sessions.get(id);
-    if (!session) return undefined;
-    
-    const updated: UserSession = {
-      ...session,
-      ...data,
-      updatedAt: new Date(),
-    };
-    this.sessions.set(id, updated);
-    return updated;
+    const [updated] = await db.update(userSessions)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(userSessions.id, id))
+      .returning();
+    return updated || undefined;
   }
 
   // Skill maps
   async createSkillMap(insertSkillMap: InsertSkillMap): Promise<SkillMap> {
-    const id = randomUUID();
-    const skillMap: SkillMap = {
-      id,
-      ...insertSkillMap,
-      createdAt: new Date(),
-    };
-    this.skillMaps.set(id, skillMap);
+    const [skillMap] = await db.insert(skillMaps).values(insertSkillMap).returning();
     return skillMap;
   }
 
   async getSkillMapBySession(sessionId: string): Promise<SkillMap | undefined> {
-    return Array.from(this.skillMaps.values()).find(sm => sm.sessionId === sessionId);
+    const [skillMap] = await db.select().from(skillMaps).where(eq(skillMaps.sessionId, sessionId));
+    return skillMap || undefined;
   }
 
   // Resumes
   async createResume(insertResume: InsertResume): Promise<Resume> {
-    const id = randomUUID();
-    const resume: Resume = {
-      id,
-      ...insertResume,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    this.resumes.set(id, resume);
+    const [resume] = await db.insert(resumes).values(insertResume).returning();
     return resume;
   }
 
   async getResumeBySession(sessionId: string): Promise<Resume | undefined> {
-    return Array.from(this.resumes.values()).find(r => r.sessionId === sessionId);
+    const [resume] = await db.select().from(resumes).where(eq(resumes.sessionId, sessionId));
+    return resume || undefined;
   }
 
   async updateResume(id: string, data: Partial<InsertResume>): Promise<Resume | undefined> {
-    const resume = this.resumes.get(id);
-    if (!resume) return undefined;
-    
-    const updated: Resume = {
-      ...resume,
-      ...data,
-      updatedAt: new Date(),
-    };
-    this.resumes.set(id, updated);
-    return updated;
+    const [updated] = await db.update(resumes)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(resumes.id, id))
+      .returning();
+    return updated || undefined;
   }
 
   // ATS analyses
   async createAtsAnalysis(insertAnalysis: InsertAtsAnalysis): Promise<AtsAnalysis> {
-    const id = randomUUID();
-    const analysis: AtsAnalysis = {
-      id,
-      ...insertAnalysis,
-      createdAt: new Date(),
-    };
-    this.atsAnalyses.set(id, analysis);
+    const [analysis] = await db.insert(atsAnalyses).values(insertAnalysis).returning();
     return analysis;
   }
 
   async getAtsAnalysesBySession(sessionId: string): Promise<AtsAnalysis[]> {
-    return Array.from(this.atsAnalyses.values()).filter(a => a.sessionId === sessionId);
+    return await db.select().from(atsAnalyses).where(eq(atsAnalyses.sessionId, sessionId));
   }
 
   // LinkedIn profiles
   async createLinkedinProfile(insertProfile: InsertLinkedinProfile): Promise<LinkedinProfile> {
-    const id = randomUUID();
-    const profile: LinkedinProfile = {
-      id,
-      ...insertProfile,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    this.linkedinProfiles.set(id, profile);
+    const [profile] = await db.insert(linkedinProfiles).values(insertProfile).returning();
     return profile;
   }
 
   async getLinkedinProfileBySession(sessionId: string): Promise<LinkedinProfile | undefined> {
-    return Array.from(this.linkedinProfiles.values()).find(p => p.sessionId === sessionId);
+    const [profile] = await db.select().from(linkedinProfiles).where(eq(linkedinProfiles.sessionId, sessionId));
+    return profile || undefined;
   }
 
   async updateLinkedinProfile(id: string, data: Partial<InsertLinkedinProfile>): Promise<LinkedinProfile | undefined> {
-    const profile = this.linkedinProfiles.get(id);
-    if (!profile) return undefined;
-    
-    const updated: LinkedinProfile = {
-      ...profile,
-      ...data,
-      updatedAt: new Date(),
-    };
-    this.linkedinProfiles.set(id, updated);
-    return updated;
+    const [updated] = await db.update(linkedinProfiles)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(linkedinProfiles.id, id))
+      .returning();
+    return updated || undefined;
   }
 
   // Interview sessions
   async createInterviewSession(insertSession: InsertInterviewSession): Promise<InterviewSession> {
-    const id = randomUUID();
-    const session: InterviewSession = {
-      id,
-      ...insertSession,
-      createdAt: new Date(),
-    };
-    this.interviewSessions.set(id, session);
+    const [session] = await db.insert(interviewSessions).values(insertSession).returning();
     return session;
   }
 
   async getInterviewSessionsBySession(sessionId: string): Promise<InterviewSession[]> {
-    return Array.from(this.interviewSessions.values()).filter(s => s.sessionId === sessionId);
+    return await db.select().from(interviewSessions).where(eq(interviewSessions.sessionId, sessionId));
   }
 
   // Documents
   async createDocument(insertDocument: InsertDocument): Promise<Document> {
-    const id = randomUUID();
-    const document: Document = {
-      id,
-      ...insertDocument,
-      createdAt: new Date(),
-    };
-    this.documents.set(id, document);
+    const [document] = await db.insert(documents).values(insertDocument).returning();
     return document;
   }
 
   async getDocumentsBySession(sessionId: string): Promise<Document[]> {
-    return Array.from(this.documents.values()).filter(d => d.sessionId === sessionId);
+    return await db.select().from(documents).where(eq(documents.sessionId, sessionId));
   }
 
   // Job listings
   async getAllJobListings(experienceLevel?: string): Promise<JobListing[]> {
-    const listings = Array.from(this.jobListings.values());
     if (experienceLevel) {
-      return listings.filter(l => l.experienceLevel === experienceLevel);
+      return await db.select().from(jobListings).where(eq(jobListings.experienceLevel, experienceLevel));
     }
-    return listings;
+    return await db.select().from(jobListings);
   }
 
   async seedJobListings(): Promise<void> {
+    // Check if we already have job listings
+    const existing = await db.select().from(jobListings).limit(1);
+    if (existing.length > 0) return;
+
     const listings = [
       // Entry level
       {
@@ -264,7 +201,7 @@ export class MemStorage implements IStorage {
         experienceLevel: "entry" as const,
         keywords: ["Marketing", "Social Media", "Content Creation"],
       },
-      // Mid level
+      // Mid/Senior level
       {
         title: "Senior Product Manager",
         company: "InnovateCorp",
@@ -294,16 +231,8 @@ export class MemStorage implements IStorage {
       },
     ];
 
-    for (const listing of listings) {
-      const id = randomUUID();
-      const jobListing: JobListing = {
-        id,
-        ...listing,
-        createdAt: new Date(),
-      };
-      this.jobListings.set(id, jobListing);
-    }
+    await db.insert(jobListings).values(listings);
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
