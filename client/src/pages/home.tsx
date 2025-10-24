@@ -6,6 +6,7 @@ import homeHeroImage from "@assets/generated_images/Homepage_hero_diverse_profes
 import { useCreateSession } from "@/lib/api-hooks";
 import { useSession } from "@/contexts/session-context";
 import type { PathType } from "@shared/schema";
+import { Link } from "react-router-dom";
 
 export default function Home() {
   const [, setLocation] = useLocation();
@@ -275,9 +276,9 @@ export default function Home() {
             <div>
               <h3 className="font-semibold mb-4">Paths</h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link href="/college-grad-path" className="hover:text-foreground transition-colors">College Graduate</Link></li>
-                <li><Link href="/experienced-path" className="hover:text-foreground transition-colors">Experienced Professional</Link></li>
-                <li><Link href="/starter-path" className="hover:text-foreground transition-colors">Just Getting Started</Link></li>
+                <li><Link to="/college-grad-path" className="hover:text-foreground transition-colors">College Graduate</Link></li>
+                <li><Link to="/experienced-path" className="hover:text-foreground transition-colors">Experienced Professional</Link></li>
+                <li><Link to="/starter-path" className="hover:text-foreground transition-colors">Just Getting Started</Link></li>
               </ul>
             </div>
             

@@ -1,5 +1,46 @@
 # LinkLaunch - AI-Powered Career Coach Platform
 
+## Execution
+**Set Env Variables**
+```
+export OPENAI_API_KEY="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"
+```
+```
+export DATABASE_URL="postgresql://neondb_owner:npg_yvEqgA8T2ZPG@ep-cold-thunder-ada6aulb-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require"
+```
+**Get your actual Neon URL:**
+```
+Go to Neon Console
+Find your project → Connection String
+Copy the URL and set it as your DATABASE_URL
+```
+
+
+**Install Dependencies**
+```
+cd linklaunch (or whatever the name of the folder)
+npm install
+npm install react-router-dom
+npx drizzle-kit generate
+npx drizzle-kit push
+```
+
+**Setup Enviornment Variables**
+Create a .env file with these variables
+```
+DATABASE_URL = your_postgres_connection_string
+OPEN_API_KEY = your_openai_api_key
+SESSION_SECRET = your_random_secret_string
+```
+**Run the application**
+```
+npm run dev
+```
+**URL**
+```
+ http://localhost:5000
+ ```
+
 ## Overview
 
 LinkLaunch is an all-in-one AI-powered career coaching platform that helps users build, optimize, and launch their careers. The application provides personalized career guidance through three distinct paths (College Graduates, Experienced Professionals, and Career Starters), offering tools for skill discovery, resume building, ATS optimization, LinkedIn profile enhancement, interview coaching, and AI-powered document writing.
@@ -114,3 +155,4 @@ The application uses Drizzle ORM to define a PostgreSQL schema with the followin
 - **clsx** + **tailwind-merge**: Utility for conditional CSS class composition.
 - **class-variance-authority**: Type-safe variant styling for component APIs.
 - **wouter**: Lightweight routing library for client-side navigation.
+
