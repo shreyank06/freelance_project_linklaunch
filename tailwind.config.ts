@@ -81,9 +81,23 @@ export default {
           busy: "rgb(239 68 68)",
           offline: "rgb(156 163 175)",
         },
+        // Career path colors
+        "path-college": {
+          DEFAULT: "hsl(217 91% 50%)",
+          foreground: "hsl(0 0% 100%)",
+        },
+        "path-professional": {
+          DEFAULT: "hsl(142 70% 42%)",
+          foreground: "hsl(0 0% 100%)",
+        },
+        "path-starter": {
+          DEFAULT: "hsl(24 90% 55%)",
+          foreground: "hsl(0 0% 100%)",
+        },
       },
       fontFamily: {
         sans: ["var(--font-sans)"],
+        accent: ["var(--font-accent)"],
         serif: ["var(--font-serif)"],
         mono: ["var(--font-mono)"],
       },
