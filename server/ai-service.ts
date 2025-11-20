@@ -1,7 +1,14 @@
 import OpenAI from "openai";
 
 // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+let openai: OpenAI | null = null;
+
+function getOpenAI() {
+  if (!openai) {
+    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+  return openai;
+}
 
 export interface SkillMapResult {
   technicalSkills: string[];
@@ -57,7 +64,7 @@ export async function generateSkillMap(
   };
 
   try {
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: "gpt-5",
       messages: [
         {
@@ -92,7 +99,7 @@ export async function generateResume(
   };
 
   try {
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: "gpt-5",
       messages: [
         {
@@ -120,7 +127,7 @@ export async function analyzeAtsMatch(
   jobDescription: string
 ): Promise<AtsAnalysisResult> {
   try {
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: "gpt-5",
       messages: [
         {
@@ -155,7 +162,7 @@ export async function generateLinkedInProfile(
   };
 
   try {
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: "gpt-5",
       messages: [
         {
@@ -190,7 +197,7 @@ export async function generateInterviewFeedback(
   };
 
   try {
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: "gpt-5",
       messages: [
         {
@@ -232,7 +239,7 @@ export async function generateDocument(
   };
 
   try {
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: "gpt-5",
       messages: [
         {

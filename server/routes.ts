@@ -120,8 +120,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ==================== SESSION & MODULE ROUTES ====================
 
-  // Create a new user session (with auth)
-  app.post("/api/sessions", requireAuth, async (req, res) => {
+  // Create a new user session (demo mode - no auth required for initial path selection)
+  app.post("/api/sessions", async (req, res) => {
     try {
       const { pathType } = req.body;
 
@@ -129,11 +129,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid path type" });
       }
 
-      const session = await authService.createUserSession(req.session.userId, pathType);
-      req.session.sessionId = session.id;
+      // For demo mode, create a session without requiring authentication
+      // Users can continue as guests and optionally authenticate later
+      let userId = req.session.userId;
 
-      res.json(session);
+      if (!userId) {
+        // Create a temporary demo user/session
+        const demoSession = await storage.createSession({
+          pathType,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+        req.session.sessionId = demoSession.id;
+        res.json(demoSession);
+      } else {
+        // If user is authenticated, create a session for them
+        const session = await authService.createUserSession(userId, pathType);
+        req.session.sessionId = session.id;
+        res.json(session);
+      }
     } catch (error: any) {
+      console.error("Session creation error:", error);
       res.status(500).json({ error: error.message });
     }
   });

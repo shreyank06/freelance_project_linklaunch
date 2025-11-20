@@ -1,10 +1,9 @@
+import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
-import pgSimple from "connect-pg-simple";
+import MemoryStore from "memorystore";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { db } from "./db";
-//import "dotenv/config";
 
 const app = express();
 
@@ -26,19 +25,16 @@ declare module 'http' {
   }
 }
 
-// Session configuration
-const PgSession = pgSimple(session);
+// Session configuration - using memory store for demo mode
 const sessionMiddleware = session({
-  store: new PgSession({
-    pool: db.$client as any,
-    tableName: 'session',
-    ttl: 30 * 24 * 60 * 60, // 30 days
+  store: new (MemoryStore(session))({
+    checkPeriod: 86400000, // prune expired entries every 24h
   }),
   secret: process.env.SESSION_SECRET || 'your-secret-key-change-this',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === 'production' && process.env.DATABASE_URL ? true : false,
     httpOnly: true,
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     sameSite: 'lax',

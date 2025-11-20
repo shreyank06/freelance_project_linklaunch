@@ -18,6 +18,9 @@ export function useCreateSession() {
     mutationFn: async (pathType: PathType) => {
       return await apiRequest<UserSession>("POST", "/api/sessions", { pathType });
     },
+    onError: (error: any) => {
+      console.error("Create session error:", error);
+    },
   });
 }
 

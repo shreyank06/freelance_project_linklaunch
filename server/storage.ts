@@ -54,6 +54,7 @@ import {
   userSessions, skillMaps, resumes, atsAnalyses, linkedinProfiles,
   interviewSessions, documents, jobListings
 } from "@shared/schema";
+import { MemoryStorage } from "./storage-memory";
 
 export class DatabaseStorage implements IStorage {
   constructor() {
@@ -235,4 +236,5 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-export const storage = new DatabaseStorage();
+// Use memory storage if database is not available
+export const storage: IStorage = db ? new DatabaseStorage() : new MemoryStorage();
