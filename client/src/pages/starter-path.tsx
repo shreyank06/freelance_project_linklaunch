@@ -9,15 +9,35 @@ import { AiChatBubble } from "@/components/shared/ai-chat-bubble";
 import { ModuleHeader } from "@/components/shared/module-header";
 import { SkillTagCloud } from "@/components/shared/skill-tag-cloud";
 import { AtsScoreDisplay } from "@/components/shared/ats-score-display";
-import { ArrowRight, Download, Copy, Check, FileText, Lightbulb, Heart } from "lucide-react";
-import type { ModuleType } from "@shared/schema";
+import { ArrowRight, Download, Copy, Check, FileText, Lightbulb, Heart, Loader } from "lucide-react";
+import type { ModuleType, SkillMap } from "@shared/schema";
+import { useCreateSkillMap } from "@/lib/api-hooks";
+import { useSession } from "@/contexts/session-context";
 import starterHeroImage from "@assets/generated_images/Career_starter_working_determinedly_33310ce1.png";
 
 const PATH_COLOR = "hsl(24 90% 55%)";
 
 export default function StarterPath() {
+  const { sessionId } = useSession();
   const [currentModule, setCurrentModule] = useState<ModuleType>('welcome');
+  const [userInput, setUserInput] = useState("");
   const [copiedSections, setCopiedSections] = useState<Set<string>>(new Set());
+  const [skillMap, setSkillMap] = useState<SkillMap | null>(null);
+  const createSkillMap = useCreateSkillMap();
+
+  const handleGenerateSkillMap = async () => {
+    if (!userInput.trim() || !sessionId) return;
+    try {
+      const result = await createSkillMap.mutateAsync({
+        sessionId,
+        userInput,
+        pathType: 'starter',
+      });
+      setSkillMap(result);
+    } catch (error) {
+      console.error("Failed to generate skill map:", error);
+    }
+  };
 
   const modules = [
     { id: 'welcome' as ModuleType, title: 'Welcome', completed: false, active: currentModule === 'welcome' },
@@ -157,59 +177,76 @@ export default function StarterPath() {
                     id="strengths"
                     placeholder="Example: I've organized community events with 100+ attendees, managed social media for a local nonprofit, and friends always ask me to help them plan their trips because I'm good at organizing details..."
                     className="min-h-32 mb-4"
+                    value={userInput}
+                    onChange={(e) => setUserInput(e.target.value)}
                     data-testid="input-strengths"
                   />
-                  <Button 
+                  <Button
                     className="w-full"
                     style={{ backgroundColor: PATH_COLOR }}
                     data-testid="button-discover-skills"
+                    onClick={handleGenerateSkillMap}
+                    disabled={createSkillMap.isPending || !userInput.trim()}
                   >
-                    Discover My Transferable Skills
+                    {createSkillMap.isPending ? (
+                      <>
+                        <Loader className="mr-2 h-4 w-4 animate-spin" />
+                        Discovering...
+                      </>
+                    ) : (
+                      "Discover My Transferable Skills"
+                    )}
                   </Button>
                 </Card>
 
-                <Card className="p-6">
-                  <h3 className="font-accent text-xl font-semibold mb-4">Your Transferable Skills</h3>
-                  
-                  <div className="space-y-6">
-                    <div>
-                      <h4 className="font-semibold mb-3">Core Competencies</h4>
-                      <SkillTagCloud
-                        skills={["Organization", "Communication", "Problem Solving", "Attention to Detail", "Time Management", "Teamwork"]}
-                        highlightedSkills={["Organization", "Communication", "Problem Solving"]}
-                        pathColor={PATH_COLOR}
-                      />
-                    </div>
-                    
-                    <div className="p-4 bg-accent/30 rounded-lg border-l-4" style={{ borderColor: PATH_COLOR }}>
-                      <h4 className="font-semibold mb-2">✨ Suggested Entry-Level Roles</h4>
-                      <ul className="space-y-1 text-sm">
-                        <li>• Event Coordinator</li>
-                        <li>• Administrative Assistant</li>
-                        <li>• Customer Service Representative</li>
-                        <li>• Social Media Coordinator</li>
-                      </ul>
-                    </div>
+                {skillMap && (
+                  <Card className="p-6">
+                    <h3 className="font-accent text-xl font-semibold mb-4">Your Transferable Skills</h3>
 
-                    <div className="p-4 bg-primary/10 rounded-lg">
-                      <h4 className="font-semibold mb-2">Confidence Boost</h4>
-                      <p className="text-sm italic">
-                        "Your organizational skills and ability to manage details show you're ready for professional roles. Many employers value these foundational skills because they can be applied across any industry!"
-                      </p>
+                    <div className="space-y-6">
+                      {Array.isArray(skillMap.transferableSkills) && skillMap.transferableSkills.length > 0 && (
+                        <div>
+                          <h4 className="font-semibold mb-3">Core Competencies</h4>
+                          <SkillTagCloud
+                            skills={skillMap.transferableSkills}
+                            highlightedSkills={skillMap.transferableSkills.slice(0, 3)}
+                            pathColor={PATH_COLOR}
+                          />
+                        </div>
+                      )}
+
+                      {skillMap.brandStatement && (
+                        <div className="p-4 bg-accent/30 rounded-lg border-l-4" style={{ borderColor: PATH_COLOR }}>
+                          <h4 className="font-semibold mb-2">✨ Your Profile</h4>
+                          <p className="text-sm italic">{skillMap.brandStatement}</p>
+                        </div>
+                      )}
+
+                      {Array.isArray(skillMap.keywords) && skillMap.keywords.length > 0 && (
+                        <div className="p-4 bg-primary/10 rounded-lg">
+                          <h4 className="font-semibold mb-2">Key Strengths</h4>
+                          <SkillTagCloud
+                            skills={skillMap.keywords}
+                            pathColor={PATH_COLOR}
+                          />
+                        </div>
+                      )}
                     </div>
+                  </Card>
+                )}
+
+                {skillMap && (
+                  <div className="flex justify-end">
+                    <Button
+                      onClick={() => setCurrentModule('resume-builder')}
+                      style={{ backgroundColor: PATH_COLOR }}
+                      data-testid="button-create-resume"
+                    >
+                      Create My First Resume
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
                   </div>
-                </Card>
-
-                <div className="flex justify-end">
-                  <Button 
-                    onClick={() => setCurrentModule('resume-builder')}
-                    style={{ backgroundColor: PATH_COLOR }}
-                    data-testid="button-create-resume"
-                  >
-                    Create My First Resume
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </div>
+                )}
               </div>
             )}
 

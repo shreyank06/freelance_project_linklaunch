@@ -9,16 +9,35 @@ import { AiChatBubble } from "@/components/shared/ai-chat-bubble";
 import { ModuleHeader } from "@/components/shared/module-header";
 import { SkillTagCloud } from "@/components/shared/skill-tag-cloud";
 import { AtsScoreDisplay } from "@/components/shared/ats-score-display";
-import { ArrowRight, Download, Copy, Check, FileText, Briefcase, Target, MessageSquare } from "lucide-react";
-import type { ModuleType } from "@shared/schema";
+import { ArrowRight, Download, Copy, Check, FileText, Briefcase, Target, MessageSquare, Loader } from "lucide-react";
+import type { ModuleType, SkillMap } from "@shared/schema";
+import { useCreateSkillMap } from "@/lib/api-hooks";
+import { useSession } from "@/contexts/session-context";
 import collegeHeroImage from "@assets/generated_images/College_graduates_celebrating_success_873a23d4.png";
 
 const PATH_COLOR = "hsl(217 91% 50%)";
 
 export default function CollegeGradPath() {
+  const { sessionId } = useSession();
   const [currentModule, setCurrentModule] = useState<ModuleType>('welcome');
   const [userInput, setUserInput] = useState("");
   const [copiedSections, setCopiedSections] = useState<Set<string>>(new Set());
+  const [skillMap, setSkillMap] = useState<SkillMap | null>(null);
+  const createSkillMap = useCreateSkillMap();
+
+  const handleGenerateSkillMap = async () => {
+    if (!userInput.trim() || !sessionId) return;
+    try {
+      const result = await createSkillMap.mutateAsync({
+        sessionId,
+        userInput,
+        pathType: 'college',
+      });
+      setSkillMap(result);
+    } catch (error) {
+      console.error("Failed to generate skill map:", error);
+    }
+  };
 
   const modules = [
     { id: 'welcome' as ModuleType, title: 'Welcome', completed: false, active: currentModule === 'welcome' },
@@ -171,57 +190,84 @@ export default function CollegeGradPath() {
                     onChange={(e) => setUserInput(e.target.value)}
                     data-testid="input-achievements"
                   />
-                  <Button 
+                  <Button
                     className="w-full"
                     style={{ backgroundColor: PATH_COLOR }}
                     data-testid="button-generate-skills"
+                    onClick={handleGenerateSkillMap}
+                    disabled={createSkillMap.isPending || !userInput.trim()}
                   >
-                    Generate My Skill Map
+                    {createSkillMap.isPending ? (
+                      <>
+                        <Loader className="mr-2 h-4 w-4 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      "Generate My Skill Map"
+                    )}
                   </Button>
                 </Card>
 
-                {/* Mock AI Generated Skills */}
-                <Card className="p-6">
-                  <h3 className="font-accent text-xl font-semibold mb-4">Your Skill Map</h3>
-                  
-                  <div className="space-y-6">
-                    <div>
-                      <h4 className="font-semibold mb-3">Technical Skills</h4>
-                      <SkillTagCloud
-                        skills={["JavaScript", "React", "Python", "Data Analysis", "SQL", "Git"]}
-                        highlightedSkills={["JavaScript", "React", "Python"]}
-                        pathColor={PATH_COLOR}
-                      />
-                    </div>
-                    
-                    <div>
-                      <h4 className="font-semibold mb-3">Leadership & Soft Skills</h4>
-                      <SkillTagCloud
-                        skills={["Team Leadership", "Project Management", "Problem Solving", "Communication", "Adaptability"]}
-                        highlightedSkills={["Team Leadership", "Project Management"]}
-                        pathColor={PATH_COLOR}
-                      />
-                    </div>
+                {/* AI Generated Skills */}
+                {skillMap && (
+                  <Card className="p-6">
+                    <h3 className="font-accent text-xl font-semibold mb-4">Your Skill Map</h3>
 
-                    <div className="p-4 bg-accent rounded-lg">
-                      <h4 className="font-semibold mb-2">Personal Brand Statement</h4>
-                      <p className="text-sm italic">
-                        "Recent computer science graduate with hands-on experience in full-stack development and a proven track record of leading successful team projects. Passionate about creating user-centered solutions and continuously learning new technologies."
-                      </p>
+                    <div className="space-y-6">
+                      {Array.isArray(skillMap.technicalSkills) && skillMap.technicalSkills.length > 0 && (
+                        <div>
+                          <h4 className="font-semibold mb-3">Technical Skills</h4>
+                          <SkillTagCloud
+                            skills={skillMap.technicalSkills}
+                            highlightedSkills={skillMap.technicalSkills.slice(0, 3)}
+                            pathColor={PATH_COLOR}
+                          />
+                        </div>
+                      )}
+
+                      {Array.isArray(skillMap.leadershipSkills) && skillMap.leadershipSkills.length > 0 && (
+                        <div>
+                          <h4 className="font-semibold mb-3">Leadership & Soft Skills</h4>
+                          <SkillTagCloud
+                            skills={skillMap.leadershipSkills}
+                            highlightedSkills={skillMap.leadershipSkills.slice(0, 2)}
+                            pathColor={PATH_COLOR}
+                          />
+                        </div>
+                      )}
+
+                      {skillMap.brandStatement && (
+                        <div className="p-4 bg-accent rounded-lg">
+                          <h4 className="font-semibold mb-2">Personal Brand Statement</h4>
+                          <p className="text-sm italic">{skillMap.brandStatement}</p>
+                        </div>
+                      )}
+
+                      {Array.isArray(skillMap.keywords) && skillMap.keywords.length > 0 && (
+                        <div className="p-4 border border-accent rounded-lg">
+                          <h4 className="font-semibold mb-2">ATS Keywords</h4>
+                          <SkillTagCloud
+                            skills={skillMap.keywords}
+                            pathColor={PATH_COLOR}
+                          />
+                        </div>
+                      )}
                     </div>
+                  </Card>
+                )}
+
+                {skillMap && (
+                  <div className="flex justify-end">
+                    <Button
+                      onClick={() => setCurrentModule('resume-builder')}
+                      style={{ backgroundColor: PATH_COLOR }}
+                      data-testid="button-build-resume"
+                    >
+                      Build My Resume with My AI Coach
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
                   </div>
-                </Card>
-
-                <div className="flex justify-end">
-                  <Button 
-                    onClick={() => setCurrentModule('resume-builder')}
-                    style={{ backgroundColor: PATH_COLOR }}
-                    data-testid="button-build-resume"
-                  >
-                    Build My Resume with My AI Coach
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </div>
+                )}
               </div>
             )}
 

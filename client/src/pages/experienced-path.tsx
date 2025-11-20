@@ -9,15 +9,35 @@ import { AiChatBubble } from "@/components/shared/ai-chat-bubble";
 import { ModuleHeader } from "@/components/shared/module-header";
 import { SkillTagCloud } from "@/components/shared/skill-tag-cloud";
 import { AtsScoreDisplay } from "@/components/shared/ats-score-display";
-import { ArrowRight, Download, Copy, Check, FileText, TrendingUp, Target } from "lucide-react";
-import type { ModuleType } from "@shared/schema";
+import { ArrowRight, Download, Copy, Check, FileText, TrendingUp, Target, Loader } from "lucide-react";
+import type { ModuleType, SkillMap } from "@shared/schema";
+import { useCreateSkillMap } from "@/lib/api-hooks";
+import { useSession } from "@/contexts/session-context";
 import professionalHeroImage from "@assets/generated_images/Professional_business_strategy_meeting_12e0d9aa.png";
 
 const PATH_COLOR = "hsl(142 70% 42%)";
 
 export default function ExperiencedPath() {
+  const { sessionId } = useSession();
   const [currentModule, setCurrentModule] = useState<ModuleType>('welcome');
+  const [userInput, setUserInput] = useState("");
   const [copiedSections, setCopiedSections] = useState<Set<string>>(new Set());
+  const [skillMap, setSkillMap] = useState<SkillMap | null>(null);
+  const createSkillMap = useCreateSkillMap();
+
+  const handleGenerateSkillMap = async () => {
+    if (!userInput.trim() || !sessionId) return;
+    try {
+      const result = await createSkillMap.mutateAsync({
+        sessionId,
+        userInput,
+        pathType: 'professional',
+      });
+      setSkillMap(result);
+    } catch (error) {
+      console.error("Failed to generate skill map:", error);
+    }
+  };
 
   const modules = [
     { id: 'welcome' as ModuleType, title: 'Welcome', completed: false, active: currentModule === 'welcome' },
@@ -157,59 +177,76 @@ export default function ExperiencedPath() {
                     id="accomplishments"
                     placeholder="Example: Led a cross-functional team of 15 to deliver a $2M product launch 3 weeks ahead of schedule, resulting in 40% increase in quarterly revenue..."
                     className="min-h-32 mb-4"
+                    value={userInput}
+                    onChange={(e) => setUserInput(e.target.value)}
                     data-testid="input-accomplishments"
                   />
-                  <Button 
+                  <Button
                     className="w-full"
                     style={{ backgroundColor: PATH_COLOR }}
                     data-testid="button-analyze-impact"
+                    onClick={handleGenerateSkillMap}
+                    disabled={createSkillMap.isPending || !userInput.trim()}
                   >
-                    Analyze My Impact
+                    {createSkillMap.isPending ? (
+                      <>
+                        <Loader className="mr-2 h-4 w-4 animate-spin" />
+                        Analyzing...
+                      </>
+                    ) : (
+                      "Analyze My Impact"
+                    )}
                   </Button>
                 </Card>
 
-                <Card className="p-6">
-                  <h3 className="font-accent text-xl font-semibold mb-4">Leadership & Impact Map</h3>
-                  
-                  <div className="space-y-6">
-                    <div>
-                      <h4 className="font-semibold mb-3">Leadership Competencies</h4>
-                      <SkillTagCloud
-                        skills={["Strategic Planning", "Team Leadership", "Cross-functional Collaboration", "Budget Management", "Stakeholder Communication"]}
-                        highlightedSkills={["Strategic Planning", "Team Leadership", "Budget Management"]}
-                        pathColor={PATH_COLOR}
-                      />
+                {skillMap && (
+                  <Card className="p-6">
+                    <h3 className="font-accent text-xl font-semibold mb-4">Leadership & Impact Map</h3>
+
+                    <div className="space-y-6">
+                      {Array.isArray(skillMap.leadershipSkills) && skillMap.leadershipSkills.length > 0 && (
+                        <div>
+                          <h4 className="font-semibold mb-3">Leadership Competencies</h4>
+                          <SkillTagCloud
+                            skills={skillMap.leadershipSkills}
+                            highlightedSkills={skillMap.leadershipSkills.slice(0, 3)}
+                            pathColor={PATH_COLOR}
+                          />
+                        </div>
+                      )}
+
+                      {skillMap.brandStatement && (
+                        <div>
+                          <h4 className="font-semibold mb-3">Your Executive Summary</h4>
+                          <p className="text-sm italic">{skillMap.brandStatement}</p>
+                        </div>
+                      )}
+
+                      {Array.isArray(skillMap.keywords) && skillMap.keywords.length > 0 && (
+                        <div>
+                          <h4 className="font-semibold mb-3">Key Impact Areas</h4>
+                          <SkillTagCloud
+                            skills={skillMap.keywords}
+                            pathColor={PATH_COLOR}
+                          />
+                        </div>
+                      )}
                     </div>
-                    
-                    <div>
-                      <h4 className="font-semibold mb-3">Quantifiable Achievements</h4>
-                      <div className="space-y-2">
-                        {[
-                          "40% increase in team productivity",
-                          "$2M+ in cost savings",
-                          "Led teams of 15+ professionals",
-                          "Reduced time-to-market by 30%",
-                        ].map((achievement, i) => (
-                          <div key={i} className="flex items-center gap-2 p-2 bg-accent/30 rounded">
-                            <Check className="h-4 w-4 flex-shrink-0" style={{ color: PATH_COLOR }} />
-                            <span className="text-sm">{achievement}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                  </Card>
+                )}
+
+                {skillMap && (
+                  <div className="flex justify-end">
+                    <Button
+                      onClick={() => setCurrentModule('resume-builder')}
+                      style={{ backgroundColor: PATH_COLOR }}
+                      data-testid="button-optimize-resume"
+                    >
+                      Optimize My Resume
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
                   </div>
-                </Card>
-
-                <div className="flex justify-end">
-                  <Button 
-                    onClick={() => setCurrentModule('resume-builder')}
-                    style={{ backgroundColor: PATH_COLOR }}
-                    data-testid="button-optimize-resume"
-                  >
-                    Optimize My Resume
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </div>
+                )}
               </div>
             )}
 
