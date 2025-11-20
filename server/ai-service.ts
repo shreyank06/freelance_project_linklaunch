@@ -65,24 +65,26 @@ export async function generateSkillMap(
 
   try {
     const response = await getOpenAI().chat.completions.create({
-      model: "gpt-5",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: `${systemPrompts[pathType]} Analyze the user's experience and provide a comprehensive skill map. Respond with JSON in this format: { "technicalSkills": string[], "leadershipSkills": string[], "transferableSkills": string[], "keywords": string[], "brandStatement": string }`,
+          content: `${systemPrompts[pathType]} Analyze the user's experience and provide a comprehensive skill map. Respond with ONLY valid JSON (no markdown, no code blocks) in this exact format: { "technicalSkills": ["skill1", "skill2"], "leadershipSkills": ["skill1", "skill2"], "transferableSkills": ["skill1", "skill2"], "keywords": ["keyword1", "keyword2"], "brandStatement": "A compelling one-sentence summary" }`,
         },
         {
           role: "user",
           content: userInput,
         },
       ],
-      response_format: { type: "json_object" },
-      max_completion_tokens: 2048,
+      temperature: 0.7,
     });
 
-    const result = JSON.parse(response.choices[0].message.content || "{}");
+    const content = response.choices[0].message.content?.trim() || "{}";
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    const result = JSON.parse(jsonMatch ? jsonMatch[0] : content);
     return result;
   } catch (error: any) {
+    console.error("Skill map generation error:", error);
     throw new Error("Failed to generate skill map: " + error.message);
   }
 }
@@ -100,24 +102,26 @@ export async function generateResume(
 
   try {
     const response = await getOpenAI().chat.completions.create({
-      model: "gpt-5",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: `${prompts[pathType]} Respond with JSON in this format: { "summary": string, "experience": [{ "title": string, "company": string, "duration": string, "bullets": string[] }], "skills": string[] }`,
+          content: `${prompts[pathType]} Respond with ONLY valid JSON (no markdown, no code blocks) in this exact format: { "summary": "A professional summary", "experience": [{ "title": "Job Title", "company": "Company Name", "duration": "MM/YYYY - MM/YYYY", "bullets": ["Achievement 1", "Achievement 2"] }], "skills": ["Skill1", "Skill2"] }`,
         },
         {
           role: "user",
           content: `User info: ${JSON.stringify(userInfo)}\nSkill map: ${JSON.stringify(skillMap)}`,
         },
       ],
-      response_format: { type: "json_object" },
-      max_completion_tokens: 3000,
+      temperature: 0.7,
     });
 
-    const result = JSON.parse(response.choices[0].message.content || "{}");
+    const content = response.choices[0].message.content?.trim() || "{}";
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    const result = JSON.parse(jsonMatch ? jsonMatch[0] : content);
     return result;
   } catch (error: any) {
+    console.error("Resume generation error:", error);
     throw new Error("Failed to generate resume: " + error.message);
   }
 }
@@ -128,24 +132,26 @@ export async function analyzeAtsMatch(
 ): Promise<AtsAnalysisResult> {
   try {
     const response = await getOpenAI().chat.completions.create({
-      model: "gpt-5",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: "You are an ATS (Applicant Tracking System) expert. Analyze how well a resume matches a job description. Provide a match percentage (0-100), identify missing keywords, suggest improvements, and highlight strengths. Respond with JSON in this format: { \"matchPercentage\": number, \"keywordGaps\": string[], \"improvements\": string[], \"strengths\": string[] }",
+          content: "You are an ATS (Applicant Tracking System) expert. Analyze how well a resume matches a job description. Provide a match percentage (0-100), identify missing keywords, suggest improvements, and highlight strengths. Respond with ONLY valid JSON (no markdown, no code blocks) in this exact format: { \"matchPercentage\": 85, \"keywordGaps\": [\"Missing keyword 1\"], \"improvements\": [\"Improvement 1\"], \"strengths\": [\"Strength 1\"] }",
         },
         {
           role: "user",
           content: `Resume:\n${JSON.stringify(resumeContent)}\n\nJob Description:\n${jobDescription}`,
         },
       ],
-      response_format: { type: "json_object" },
-      max_completion_tokens: 2048,
+      temperature: 0.7,
     });
 
-    const result = JSON.parse(response.choices[0].message.content || "{}");
+    const content = response.choices[0].message.content?.trim() || "{}";
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    const result = JSON.parse(jsonMatch ? jsonMatch[0] : content);
     return result;
   } catch (error: any) {
+    console.error("ATS analysis error:", error);
     throw new Error("Failed to analyze ATS match: " + error.message);
   }
 }
@@ -163,24 +169,26 @@ export async function generateLinkedInProfile(
 
   try {
     const response = await getOpenAI().chat.completions.create({
-      model: "gpt-5",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: `${prompts[pathType]} Respond with JSON in this format: { "headline": string, "about": string, "experienceSection": [{ "title": string, "description": string }], "skillsList": string[] }`,
+          content: `${prompts[pathType]} Respond with ONLY valid JSON (no markdown, no code blocks) in this exact format: { "headline": "Professional headline", "about": "About section content", "experienceSection": [{ "title": "Role Title", "description": "Role description" }], "skillsList": ["Skill1", "Skill2"] }`,
         },
         {
           role: "user",
           content: `Skill map: ${JSON.stringify(skillMap)}\nResume: ${JSON.stringify(resumeContent)}`,
         },
       ],
-      response_format: { type: "json_object" },
-      max_completion_tokens: 3000,
+      temperature: 0.7,
     });
 
-    const result = JSON.parse(response.choices[0].message.content || "{}");
+    const content = response.choices[0].message.content?.trim() || "{}";
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    const result = JSON.parse(jsonMatch ? jsonMatch[0] : content);
     return result;
   } catch (error: any) {
+    console.error("LinkedIn profile generation error:", error);
     throw new Error("Failed to generate LinkedIn profile: " + error.message);
   }
 }
@@ -198,24 +206,26 @@ export async function generateInterviewFeedback(
 
   try {
     const response = await getOpenAI().chat.completions.create({
-      model: "gpt-5",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: `${prompts[pathType]} Respond with JSON in this format: { "overallScore": number (1-10), "strengths": string[], "improvements": string[], "specificFeedback": string }`,
+          content: `${prompts[pathType]} Respond with ONLY valid JSON (no markdown, no code blocks) in this exact format: { "overallScore": 8, "strengths": ["Strength 1"], "improvements": ["Improvement 1"], "specificFeedback": "Detailed feedback" }`,
         },
         {
           role: "user",
           content: `Question: ${question}\nAnswer: ${answer}`,
         },
       ],
-      response_format: { type: "json_object" },
-      max_completion_tokens: 2048,
+      temperature: 0.7,
     });
 
-    const result = JSON.parse(response.choices[0].message.content || "{}");
+    const content = response.choices[0].message.content?.trim() || "{}";
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    const result = JSON.parse(jsonMatch ? jsonMatch[0] : content);
     return result;
   } catch (error: any) {
+    console.error("Interview feedback generation error:", error);
     throw new Error("Failed to generate interview feedback: " + error.message);
   }
 }
@@ -226,21 +236,21 @@ export async function generateDocument(
   userProfile: any,
   pathType: 'college' | 'professional' | 'starter'
 ): Promise<string> {
-  const prompts = {
+  const basePrompts = {
     college: "Write a professional cover letter for a recent graduate. Show enthusiasm and connect academic experiences to the role.",
     professional: "Write an executive-level cover letter that demonstrates strategic thinking and leadership experience.",
     starter: "Write a warm, professional cover letter for someone new to the workforce. Emphasize transferable skills and eagerness to learn.",
   };
 
   const documentPrompts = {
-    cover_letter: prompts[pathType],
+    cover_letter: basePrompts[pathType],
     follow_up: "Write a professional follow-up email after a job application or interview.",
     thank_you: "Write a thoughtful thank-you note after an interview.",
   };
 
   try {
     const response = await getOpenAI().chat.completions.create({
-      model: "gpt-5",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
@@ -251,11 +261,12 @@ export async function generateDocument(
           content: `Recipient: ${JSON.stringify(recipientInfo)}\nUser profile: ${JSON.stringify(userProfile)}`,
         },
       ],
-      max_completion_tokens: 2048,
+      temperature: 0.7,
     });
 
     return response.choices[0].message.content || "";
   } catch (error: any) {
+    console.error("Document generation error:", error);
     throw new Error("Failed to generate document: " + error.message);
   }
 }

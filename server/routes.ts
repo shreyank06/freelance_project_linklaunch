@@ -256,7 +256,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== SKILL DISCOVERY ROUTES ====================
 
   // Generate skill map
-  app.post("/api/skill-map", requireAuth, async (req, res) => {
+  app.post("/api/skill-map", async (req, res) => {
     try {
       const { sessionId, userInput, pathType } = req.body;
 
@@ -304,7 +304,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== RESUME ROUTES ====================
 
   // Generate resume
-  app.post("/api/resume", requireAuth, async (req, res) => {
+  app.post("/api/resume", async (req, res) => {
     try {
       const { sessionId, pathType, userInfo, skillMapId } = req.body;
 
@@ -403,7 +403,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== ATS ANALYSIS ROUTES ====================
 
   // Analyze ATS match
-  app.post("/api/ats-analysis", requireAuth, async (req, res) => {
+  app.post("/api/ats-analysis", async (req, res) => {
     try {
       const { sessionId, resumeId, jobDescription } = req.body;
 
@@ -454,7 +454,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== LINKEDIN PROFILE ROUTES ====================
 
   // Generate LinkedIn profile
-  app.post("/api/linkedin-profile", requireAuth, async (req, res) => {
+  app.post("/api/linkedin-profile", async (req, res) => {
     try {
       const { sessionId, pathType } = req.body;
 
@@ -518,7 +518,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== INTERVIEW COACHING ROUTES ====================
 
   // Generate interview feedback
-  app.post("/api/interview-feedback", requireAuth, async (req, res) => {
+  app.post("/api/interview-feedback", async (req, res) => {
     try {
       const { sessionId, pathType, question, answer } = req.body;
 
@@ -562,7 +562,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== DOCUMENT GENERATION ROUTES ====================
 
   // Generate document
-  app.post("/api/document", requireAuth, async (req, res) => {
+  app.post("/api/document", async (req, res) => {
     try {
       const { sessionId, documentType, recipientInfo, pathType } = req.body;
 
