@@ -1,13 +1,38 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, jsonb, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, jsonb, timestamp, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// Users table for authentication
+export const users = pgTable("users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: varchar("email", { length: 255 }).notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  fullName: varchar("full_name", { length: 255 }),
+  isVerified: boolean("is_verified").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
 
 // User session data
 export const userSessions = pgTable("user_sessions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
   pathType: text("path_type").notNull(), // 'college', 'professional', 'starter'
   currentModule: text("current_module").notNull().default('welcome'),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Module progress tracking
+export const moduleProgress = pgTable("module_progress", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sessionId: varchar("session_id").notNull().references(() => userSessions.id),
+  moduleName: text("module_name").notNull(),
+  status: text("status").$type<'locked' | 'in_progress' | 'completed'>().notNull().default('locked'),
+  progress: integer("progress").default(0), // 0-100
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -126,7 +151,19 @@ export const jobListings = pgTable("job_listings", {
 });
 
 // Insert schemas
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertUserSessionSchema = createInsertSchema(userSessions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertModuleProgressSchema = createInsertSchema(moduleProgress).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -170,8 +207,14 @@ export const insertJobListingSchema = createInsertSchema(jobListings).omit({
 });
 
 // Types
+export type User = typeof users.$inferSelect;
+export type InsertUser = z.infer<typeof insertUserSchema>;
+
 export type UserSession = typeof userSessions.$inferSelect;
 export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;
+
+export type ModuleProgress = typeof moduleProgress.$inferSelect;
+export type InsertModuleProgress = z.infer<typeof insertModuleProgressSchema>;
 
 export type SkillMap = typeof skillMaps.$inferSelect;
 export type InsertSkillMap = z.infer<typeof insertSkillMapSchema>;

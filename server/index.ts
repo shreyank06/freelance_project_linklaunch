@@ -1,15 +1,51 @@
 import express, { type Request, Response, NextFunction } from "express";
+import session from "express-session";
+import pgSimple from "connect-pg-simple";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { db } from "./db";
 //import "dotenv/config";
 
 const app = express();
+
+// Add session support to Express.Request
+declare global {
+  namespace Express {
+    interface Request {
+      session: Express.Session & {
+        userId?: string;
+        sessionId?: string;
+      };
+    }
+  }
+}
 
 declare module 'http' {
   interface IncomingMessage {
     rawBody: unknown
   }
 }
+
+// Session configuration
+const PgSession = pgSimple(session);
+const sessionMiddleware = session({
+  store: new PgSession({
+    pool: db.$client as any,
+    tableName: 'session',
+    ttl: 30 * 24 * 60 * 60, // 30 days
+  }),
+  secret: process.env.SESSION_SECRET || 'your-secret-key-change-this',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    sameSite: 'lax',
+  },
+});
+
+app.use(sessionMiddleware);
 app.use(express.json({
   verify: (req, _res, buf) => {
     req.rawBody = buf;

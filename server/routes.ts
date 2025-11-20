@@ -2,29 +2,229 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import * as aiService from "./ai-service";
+import * as authService from "./auth-service";
+import * as documentExporter from "./document-export-service";
 import { z } from "zod";
 import { insertSkillMapSchema, insertResumeSchema, insertAtsAnalysisSchema, insertLinkedinProfileSchema, insertInterviewSessionSchema, insertDocumentSchema } from "@shared/schema";
+import { Readable } from "stream";
+
+// Authentication middleware
+function requireAuth(req: any, res: any, next: any) {
+  if (!req.session?.userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  next();
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Create a new user session
-  app.post("/api/sessions", async (req, res) => {
+  // ==================== AUTHENTICATION ROUTES ====================
+
+  // Register
+  app.post("/api/auth/register", async (req, res) => {
     try {
-      const { pathType } = req.body;
-      
+      const { email, password, fullName, pathType } = req.body;
+
+      if (!email || !password || !pathType) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      // Validate path type
       if (!['college', 'professional', 'starter'].includes(pathType)) {
         return res.status(400).json({ error: "Invalid path type" });
       }
 
-      const session = await storage.createSession({
-        pathType,
-        currentModule: 'welcome',
+      // Create user
+      const user = await authService.createUser(email, password, fullName);
+
+      // Create user session
+      const userSession = await authService.createUserSession(user.id, pathType);
+
+      // Store in session
+      req.session.userId = user.id;
+      req.session.sessionId = userSession.id;
+
+      res.json({
+        user: { id: user.id, email: user.email, fullName: user.fullName },
+        session: userSession,
       });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Login
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({ error: "Missing email or password" });
+      }
+
+      // Find user
+      const user = await authService.getUserByEmail(email);
+
+      if (!user) {
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+
+      // Verify password
+      const isValid = await authService.verifyPassword(password, user.passwordHash);
+
+      if (!isValid) {
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+
+      // Get user sessions
+      const sessions = await authService.getUserSessions(user.id);
+
+      if (sessions.length === 0) {
+        return res.status(404).json({ error: "No active session found. Please select a path to start." });
+      }
+
+      // Use the first session (or most recent)
+      const userSession = sessions[0];
+
+      req.session.userId = user.id;
+      req.session.sessionId = userSession.id;
+
+      res.json({
+        user: { id: user.id, email: user.email, fullName: user.fullName },
+        sessions,
+        currentSession: userSession,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Logout
+  app.post("/api/auth/logout", (req, res) => {
+    req.session.destroy((err: any) => {
+      if (err) {
+        return res.status(500).json({ error: "Logout failed" });
+      }
+      res.json({ success: true });
+    });
+  });
+
+  // Get current user
+  app.get("/api/auth/me", requireAuth, async (req, res) => {
+    try {
+      const user = await authService.getUserById(req.session.userId);
+      res.json(user);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ==================== SESSION & MODULE ROUTES ====================
+
+  // Create a new user session (with auth)
+  app.post("/api/sessions", requireAuth, async (req, res) => {
+    try {
+      const { pathType } = req.body;
+
+      if (!['college', 'professional', 'starter'].includes(pathType)) {
+        return res.status(400).json({ error: "Invalid path type" });
+      }
+
+      const session = await authService.createUserSession(req.session.userId, pathType);
+      req.session.sessionId = session.id;
 
       res.json(session);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
+
+  // Get current session
+  app.get("/api/sessions/:sessionId", requireAuth, async (req, res) => {
+    try {
+      const session = await authService.getUserSession(req.params.sessionId);
+
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+
+      res.json(session);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get user's sessions
+  app.get("/api/user/sessions", requireAuth, async (req, res) => {
+    try {
+      const sessions = await authService.getUserSessions(req.session.userId);
+      res.json(sessions);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get module progress
+  app.get("/api/sessions/:sessionId/progress", requireAuth, async (req, res) => {
+    try {
+      const progress = await authService.getModuleProgress(req.params.sessionId);
+      res.json(progress);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Update current module
+  app.post("/api/sessions/:sessionId/current-module", requireAuth, async (req, res) => {
+    try {
+      const { moduleName } = req.body;
+
+      // Check if module is unlocked
+      const isUnlocked = await authService.isModuleUnlocked(req.params.sessionId, moduleName);
+
+      if (!isUnlocked) {
+        return res.status(403).json({ error: "Module is locked. Complete previous modules first." });
+      }
+
+      const result = await authService.updateCurrentModule(req.params.sessionId, moduleName);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Complete module
+  app.post("/api/sessions/:sessionId/complete-module", requireAuth, async (req, res) => {
+    try {
+      const { moduleName } = req.body;
+
+      const result = await authService.completeModule(req.params.sessionId, moduleName);
+      res.json({ success: result });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Update module progress (0-100)
+  app.post("/api/sessions/:sessionId/progress", requireAuth, async (req, res) => {
+    try {
+      const { moduleName, progress } = req.body;
+
+      if (typeof progress !== 'number' || progress < 0 || progress > 100) {
+        return res.status(400).json({ error: "Progress must be between 0 and 100" });
+      }
+
+      const result = await authService.updateModuleProgress(
+        req.params.sessionId,
+        moduleName,
+        progress
+      );
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ==================== JOB LISTINGS ROUTES ====================
 
   // Get job listings
   app.get("/api/jobs", async (req, res) => {
@@ -37,8 +237,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== SKILL DISCOVERY ROUTES ====================
+
   // Generate skill map
-  app.post("/api/skill-map", async (req, res) => {
+  app.post("/api/skill-map", requireAuth, async (req, res) => {
     try {
       const { sessionId, userInput, pathType } = req.body;
 
@@ -72,7 +274,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { sessionId } = req.params;
       const skillMap = await storage.getSkillMapBySession(sessionId);
-      
+
       if (!skillMap) {
         return res.status(404).json({ error: "Skill map not found" });
       }
@@ -83,8 +285,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== RESUME ROUTES ====================
+
   // Generate resume
-  app.post("/api/resume", async (req, res) => {
+  app.post("/api/resume", requireAuth, async (req, res) => {
     try {
       const { sessionId, pathType, userInfo, skillMapId } = req.body;
 
@@ -94,7 +298,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get skill map
       const skillMap = await storage.getSkillMapBySession(sessionId);
-      
+
       if (!skillMap) {
         return res.status(400).json({ error: "Please complete skill discovery first" });
       }
@@ -131,7 +335,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { sessionId } = req.params;
       const resume = await storage.getResumeBySession(sessionId);
-      
+
       if (!resume) {
         return res.status(404).json({ error: "Resume not found" });
       }
@@ -142,8 +346,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Export resume as PDF
+  app.get("/api/resume/:sessionId/export/pdf", async (req, res) => {
+    try {
+      const resume = await storage.getResumeBySession(req.params.sessionId);
+
+      if (!resume) {
+        return res.status(404).json({ error: "Resume not found" });
+      }
+
+      const pdfBuffer = await documentExporter.generateResumePDF(resume);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename="resume.pdf"');
+      res.send(pdfBuffer);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Export resume as DOCX
+  app.get("/api/resume/:sessionId/export/docx", async (req, res) => {
+    try {
+      const resume = await storage.getResumeBySession(req.params.sessionId);
+
+      if (!resume) {
+        return res.status(404).json({ error: "Resume not found" });
+      }
+
+      const docxBuffer = await documentExporter.generateResumeDOCX(resume);
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      res.setHeader('Content-Disposition', 'attachment; filename="resume.docx"');
+      res.send(docxBuffer);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ==================== ATS ANALYSIS ROUTES ====================
+
   // Analyze ATS match
-  app.post("/api/ats-analysis", async (req, res) => {
+  app.post("/api/ats-analysis", requireAuth, async (req, res) => {
     try {
       const { sessionId, resumeId, jobDescription } = req.body;
 
@@ -152,7 +396,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get resume
-      const resume = resumeId 
+      const resume = resumeId
         ? await storage.resumes?.get(resumeId)
         : await storage.getResumeBySession(sessionId);
 
@@ -191,8 +435,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== LINKEDIN PROFILE ROUTES ====================
+
   // Generate LinkedIn profile
-  app.post("/api/linkedin-profile", async (req, res) => {
+  app.post("/api/linkedin-profile", requireAuth, async (req, res) => {
     try {
       const { sessionId, pathType } = req.body;
 
@@ -242,7 +488,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { sessionId } = req.params;
       const profile = await storage.getLinkedinProfileBySession(sessionId);
-      
+
       if (!profile) {
         return res.status(404).json({ error: "LinkedIn profile not found" });
       }
@@ -253,8 +499,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== INTERVIEW COACHING ROUTES ====================
+
   // Generate interview feedback
-  app.post("/api/interview-feedback", async (req, res) => {
+  app.post("/api/interview-feedback", requireAuth, async (req, res) => {
     try {
       const { sessionId, pathType, question, answer } = req.body;
 
@@ -295,8 +543,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== DOCUMENT GENERATION ROUTES ====================
+
   // Generate document
-  app.post("/api/document", async (req, res) => {
+  app.post("/api/document", requireAuth, async (req, res) => {
     try {
       const { sessionId, documentType, recipientInfo, pathType } = req.body;
 
@@ -339,6 +589,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { sessionId } = req.params;
       const documents = await storage.getDocumentsBySession(sessionId);
       res.json(documents);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Export document as PDF
+  app.get("/api/document/:documentId/export/pdf", async (req, res) => {
+    try {
+      const document = await storage.documents?.get(req.params.documentId);
+
+      if (!document) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+
+      const pdfBuffer = await documentExporter.generateCoverLetterPDF(document);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${document.documentType}.pdf"`);
+      res.send(pdfBuffer);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Export document as DOCX
+  app.get("/api/document/:documentId/export/docx", async (req, res) => {
+    try {
+      const document = await storage.documents?.get(req.params.documentId);
+
+      if (!document) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+
+      const docxBuffer = await documentExporter.generateCoverLetterDOCX(document);
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      res.setHeader('Content-Disposition', `attachment; filename="${document.documentType}.docx"`);
+      res.send(docxBuffer);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
