@@ -25,6 +25,7 @@ export default function CollegeGradPath() {
   const [skillMap, setSkillMap] = useState<SkillMap | null>(null);
   const [resume, setResume] = useState<Resume | null>(null);
   const [resumeFormData, setResumeFormData] = useState({ fullName: "", email: "", phone: "", location: "" });
+  const [professionalSummary, setProfessionalSummary] = useState("");
   const [jobSearchQuery, setJobSearchQuery] = useState("");
   const [jobTypeFilter, setJobTypeFilter] = useState<"remote" | "onsite" | "hybrid" | null>(null);
   const [locationFilter, setLocationFilter] = useState("");
@@ -67,6 +68,7 @@ export default function CollegeGradPath() {
         pathType: 'college',
       });
       setSkillMap(result);
+      setProfessionalSummary(result.brandStatement || "");
     } catch (error) {
       console.error("Failed to generate skill map:", error);
     }
@@ -78,7 +80,7 @@ export default function CollegeGradPath() {
       const result = await createResume.mutateAsync({
         sessionId,
         pathType: 'college',
-        userInfo: resumeFormData,
+        userInfo: { ...resumeFormData, professionalSummary },
         skillMapId: skillMap.id,
       });
       setResume(result);
@@ -607,8 +609,8 @@ export default function CollegeGradPath() {
                     <Textarea
                       className="min-h-24"
                       placeholder="AI will generate this based on your skill map..."
-                      defaultValue={skillMap?.brandStatement || ""}
-                      readOnly
+                      value={professionalSummary}
+                      onChange={(e) => setProfessionalSummary(e.target.value)}
                       data-testid="input-summary"
                     />
                   </div>
