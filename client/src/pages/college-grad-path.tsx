@@ -9,7 +9,7 @@ import { AiChatBubble } from "@/components/shared/ai-chat-bubble";
 import { ModuleHeader } from "@/components/shared/module-header";
 import { SkillTagCloud } from "@/components/shared/skill-tag-cloud";
 import { AtsScoreDisplay } from "@/components/shared/ats-score-display";
-import { ArrowRight, Download, Copy, Check, FileText, Briefcase, Target, MessageSquare, Loader, Search } from "lucide-react";
+import { ArrowRight, Download, Copy, Check, FileText, Briefcase, Target, MessageSquare, Loader, Search, Upload, X } from "lucide-react";
 import type { ModuleType, SkillMap, Resume } from "@shared/schema";
 import { useCreateSkillMap, useCreateResume, useSearchJobs, useSearchExternalJobs } from "@/lib/api-hooks";
 import { useSession } from "@/contexts/session-context";
@@ -27,6 +27,7 @@ export default function CollegeGradPath() {
   const [resumeFormData, setResumeFormData] = useState({ fullName: "", email: "", phone: "", location: "" });
   const [professionalSummary, setProfessionalSummary] = useState("");
   const [existingResume, setExistingResume] = useState("");
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [resumeStep, setResumeStep] = useState<"input" | "form">("input");
   const [jobSearchQuery, setJobSearchQuery] = useState("");
   const [jobTypeFilter, setJobTypeFilter] = useState<"remote" | "onsite" | "hybrid" | null>(null);
@@ -103,6 +104,26 @@ export default function CollegeGradPath() {
     { id: 'interview-coach' as ModuleType, title: 'Interview Coach', completed: false, active: currentModule === 'interview-coach' },
     { id: 'document-writer' as ModuleType, title: 'AI Document Writer', completed: false, active: currentModule === 'document-writer' },
   ];
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+    if (!validTypes.includes(file.type)) {
+      alert('Please upload a PDF, JPG, or PNG file');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size must be less than 5MB');
+      return;
+    }
+
+    setResumeFile(file);
+  };
 
   const handleCopy = (section: string, text: string) => {
     navigator.clipboard.writeText(text);
@@ -561,21 +582,44 @@ export default function CollegeGradPath() {
               <div className="space-y-6">
                 {resumeStep === "input" && (
                   <>
-                    <AiChatBubble message={selectedJob ? `Do you have an existing resume? If yes, paste it here and I'll analyze it. If it's ATS-friendly, I'll rephrase and optimize it for the ${selectedJob.title} position. If not, I'll create a new ATS-friendly one tailored to this role.` : "Do you have an existing resume? If yes, paste it here and I'll analyze if it's ATS-friendly and optimize it accordingly. If not, I can generate a new one for you."} />
+                    <AiChatBubble message={selectedJob ? `Do you have an existing resume? Upload your PDF or image file and I'll analyze it. If it's ATS-friendly, I'll rephrase and optimize it for the ${selectedJob.title} position. If not, I'll create a new ATS-friendly one tailored to this role.` : "Do you have an existing resume? Upload your PDF or image file and I'll analyze if it's ATS-friendly and optimize it accordingly. If not, I can generate a new one for you."} />
 
                     <Card className="p-6">
                       <h3 className="font-accent text-xl font-semibold mb-6">Do You Have an Existing Resume?</h3>
 
                       <div className="mb-6">
-                        <Label htmlFor="existing-resume" className="text-base font-semibold mb-2 block">Paste Your Existing Resume (Optional)</Label>
-                        <Textarea
-                          id="existing-resume"
-                          placeholder="Paste your current resume here... (If left empty, I'll generate a new ATS-friendly resume for you)"
-                          value={existingResume}
-                          onChange={(e) => setExistingResume(e.target.value)}
-                          className="min-h-48"
-                          data-testid="input-existing-resume"
-                        />
+                        <Label className="text-base font-semibold mb-3 block">Upload Your Resume (Optional)</Label>
+                        <div className="border-2 border-dashed rounded-lg p-6 text-center hover:bg-accent/30 transition-colors">
+                          <input
+                            type="file"
+                            id="resume-upload"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={handleFileUpload}
+                            className="hidden"
+                            data-testid="input-resume-file"
+                          />
+                          <label htmlFor="resume-upload" className="cursor-pointer flex flex-col items-center gap-2">
+                            <Upload className="h-8 w-8 text-muted-foreground" />
+                            <span className="font-semibold">Click to upload or drag and drop</span>
+                            <span className="text-sm text-muted-foreground">PDF, JPG, or PNG (Max 5MB)</span>
+                          </label>
+                        </div>
+
+                        {resumeFile && (
+                          <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <FileText className="h-5 w-5 text-green-600" />
+                              <span className="text-sm font-medium text-green-700">{resumeFile.name}</span>
+                            </div>
+                            <button
+                              onClick={() => setResumeFile(null)}
+                              className="text-green-600 hover:text-green-700"
+                              data-testid="button-remove-resume"
+                            >
+                              <X className="h-5 w-5" />
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex gap-3">
@@ -585,7 +629,7 @@ export default function CollegeGradPath() {
                           onClick={() => setResumeStep("form")}
                           data-testid="button-proceed-resume"
                         >
-                          {existingResume.trim() ? "Analyze & Optimize Resume" : "Generate New Resume"}
+                          {resumeFile ? "Analyze & Optimize Resume" : "Generate New Resume"}
                           <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
                       </div>
