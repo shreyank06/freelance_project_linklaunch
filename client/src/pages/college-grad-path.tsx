@@ -26,6 +26,8 @@ export default function CollegeGradPath() {
   const [resume, setResume] = useState<Resume | null>(null);
   const [resumeFormData, setResumeFormData] = useState({ fullName: "", email: "", phone: "", location: "" });
   const [professionalSummary, setProfessionalSummary] = useState("");
+  const [existingResume, setExistingResume] = useState("");
+  const [resumeStep, setResumeStep] = useState<"input" | "form">("input");
   const [jobSearchQuery, setJobSearchQuery] = useState("");
   const [jobTypeFilter, setJobTypeFilter] = useState<"remote" | "onsite" | "hybrid" | null>(null);
   const [locationFilter, setLocationFilter] = useState("");
@@ -75,15 +77,17 @@ export default function CollegeGradPath() {
   };
 
   const handleGenerateResume = async () => {
-    if (!sessionId || !skillMap) return;
+    if (!sessionId) return;
     try {
       const result = await createResume.mutateAsync({
         sessionId,
         pathType: 'college',
-        userInfo: { ...resumeFormData, professionalSummary },
-        skillMapId: skillMap.id,
+        userInfo: { ...resumeFormData, professionalSummary, existingResume },
+        skillMapId: skillMap?.id,
+        selectedJobDescription: selectedJob ? `${selectedJob.title} at ${selectedJob.company}` : undefined,
       });
       setResume(result);
+      setResumeStep("input");
     } catch (error) {
       console.error("Failed to generate resume:", error);
     }
@@ -555,12 +559,48 @@ export default function CollegeGradPath() {
             {/* Resume Builder Module */}
             {currentModule === 'resume-builder' && (
               <div className="space-y-6">
-                <AiChatBubble message="Great! I'll help you create an ATS-friendly resume that highlights your education and projects. Let's start with your basic information." />
+                {resumeStep === "input" && (
+                  <>
+                    <AiChatBubble message={selectedJob ? `Do you have an existing resume? If yes, paste it here and I'll analyze it. If it's ATS-friendly, I'll rephrase and optimize it for the ${selectedJob.title} position. If not, I'll create a new ATS-friendly one tailored to this role.` : "Do you have an existing resume? If yes, paste it here and I'll analyze if it's ATS-friendly and optimize it accordingly. If not, I can generate a new one for you."} />
 
-                <Card className="p-6">
-                  <h3 className="font-accent text-xl font-semibold mb-6">Resume Builder</h3>
-                  
-                  <div className="grid md:grid-cols-2 gap-4 mb-6">
+                    <Card className="p-6">
+                      <h3 className="font-accent text-xl font-semibold mb-6">Do You Have an Existing Resume?</h3>
+
+                      <div className="mb-6">
+                        <Label htmlFor="existing-resume" className="text-base font-semibold mb-2 block">Paste Your Existing Resume (Optional)</Label>
+                        <Textarea
+                          id="existing-resume"
+                          placeholder="Paste your current resume here... (If left empty, I'll generate a new ATS-friendly resume for you)"
+                          value={existingResume}
+                          onChange={(e) => setExistingResume(e.target.value)}
+                          className="min-h-48"
+                          data-testid="input-existing-resume"
+                        />
+                      </div>
+
+                      <div className="flex gap-3">
+                        <Button
+                          className="flex-1"
+                          style={{ backgroundColor: PATH_COLOR }}
+                          onClick={() => setResumeStep("form")}
+                          data-testid="button-proceed-resume"
+                        >
+                          {existingResume.trim() ? "Analyze & Optimize Resume" : "Generate New Resume"}
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                        </Button>
+                      </div>
+                    </Card>
+                  </>
+                )}
+
+                {resumeStep === "form" && (
+                  <>
+                    <AiChatBubble message={existingResume.trim() ? "Let me verify your basic information and then I'll analyze your resume for ATS compatibility." : "Great! I'll create an ATS-friendly resume tailored to your target role. Let's start with your basic information."} />
+
+                    <Card className="p-6">
+                      <h3 className="font-accent text-xl font-semibold mb-6">Resume Information</h3>
+
+                      <div className="grid md:grid-cols-2 gap-4 mb-6">
                     <div>
                       <Label htmlFor="name">Full Name</Label>
                       <Input
@@ -635,6 +675,8 @@ export default function CollegeGradPath() {
                     )}
                   </Button>
                 </Card>
+                  </>
+                )}
 
                 {resume && (
                   <Card className="p-6">
