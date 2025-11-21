@@ -9,21 +9,54 @@ import { AiChatBubble } from "@/components/shared/ai-chat-bubble";
 import { ModuleHeader } from "@/components/shared/module-header";
 import { SkillTagCloud } from "@/components/shared/skill-tag-cloud";
 import { AtsScoreDisplay } from "@/components/shared/ats-score-display";
-import { ArrowRight, Download, Copy, Check, FileText, Briefcase, Target, MessageSquare, Loader } from "lucide-react";
-import type { ModuleType, SkillMap } from "@shared/schema";
-import { useCreateSkillMap } from "@/lib/api-hooks";
+import { ArrowRight, Download, Copy, Check, FileText, Briefcase, Target, MessageSquare, Loader, Search } from "lucide-react";
+import type { ModuleType, SkillMap, Resume } from "@shared/schema";
+import { useCreateSkillMap, useCreateResume, useSearchJobs, useSearchExternalJobs } from "@/lib/api-hooks";
 import { useSession } from "@/contexts/session-context";
 import collegeHeroImage from "@assets/generated_images/College_graduates_celebrating_success_873a23d4.png";
 
 const PATH_COLOR = "hsl(217 91% 50%)";
 
 export default function CollegeGradPath() {
-  const { sessionId } = useSession();
+  const { sessionId, setSelectedJob, selectedJob } = useSession();
   const [currentModule, setCurrentModule] = useState<ModuleType>('welcome');
   const [userInput, setUserInput] = useState("");
   const [copiedSections, setCopiedSections] = useState<Set<string>>(new Set());
   const [skillMap, setSkillMap] = useState<SkillMap | null>(null);
+  const [resume, setResume] = useState<Resume | null>(null);
+  const [resumeFormData, setResumeFormData] = useState({ fullName: "", email: "", phone: "", location: "" });
+  const [jobSearchQuery, setJobSearchQuery] = useState("");
+  const [jobTypeFilter, setJobTypeFilter] = useState<"remote" | "onsite" | "hybrid" | null>(null);
+  const [locationFilter, setLocationFilter] = useState("");
+  const [salaryMinFilter, setSalaryMinFilter] = useState("");
+  const [salaryMaxFilter, setSalaryMaxFilter] = useState("");
+
   const createSkillMap = useCreateSkillMap();
+  const createResume = useCreateResume();
+
+  // Build search query with filters
+  const buildSearchQuery = () => {
+    if (!jobSearchQuery) return null;
+
+    const params = new URLSearchParams();
+    params.append('q', jobSearchQuery);
+    if (jobTypeFilter) params.append('jobType', jobTypeFilter);
+    if (locationFilter) params.append('location', locationFilter);
+    if (salaryMinFilter) params.append('salaryMin', salaryMinFilter);
+    if (salaryMaxFilter) params.append('salaryMax', salaryMaxFilter);
+
+    return params.toString();
+  };
+
+  // Try external jobs first, fallback to local jobs
+  const externalJobsQuery = useSearchExternalJobs(jobSearchQuery.length > 0 ? buildSearchQuery() : null);
+  const localJobsQuery = useSearchJobs(jobSearchQuery.length > 0 ? jobSearchQuery : null);
+
+  // Use external jobs if available and successful, otherwise use local jobs
+  const searchResults = externalJobsQuery.data?.jobs || localJobsQuery.data || [];
+  const isSearching = externalJobsQuery.isPending || localJobsQuery.isPending;
+  const usesExternalAPI = !!externalJobsQuery.data?.jobs && externalJobsQuery.data.jobs.length > 0;
+  const backendMessage = externalJobsQuery.data?.message;
 
   const handleGenerateSkillMap = async () => {
     if (!userInput.trim() || !sessionId) return;
@@ -36,6 +69,21 @@ export default function CollegeGradPath() {
       setSkillMap(result);
     } catch (error) {
       console.error("Failed to generate skill map:", error);
+    }
+  };
+
+  const handleGenerateResume = async () => {
+    if (!sessionId || !skillMap) return;
+    try {
+      const result = await createResume.mutateAsync({
+        sessionId,
+        pathType: 'college',
+        userInfo: resumeFormData,
+        skillMapId: skillMap.id,
+      });
+      setResume(result);
+    } catch (error) {
+      console.error("Failed to generate resume:", error);
     }
   };
 
@@ -134,39 +182,270 @@ export default function CollegeGradPath() {
             {/* Job Listings Module */}
             {currentModule === 'job-listings' && (
               <div className="space-y-6">
-                <AiChatBubble message="Let's explore job opportunities that match your interests. Browse these positions and identify roles that excite you." />
+                <AiChatBubble message={selectedJob ? `Great! You've selected ${selectedJob.title} at ${selectedJob.company}. I'll tailor your LinkedIn profile and interview coaching for this role. Let's move to the next step.` : "Search for jobs that match your interests and skills. Type in a job title, company name, skill, or location to find relevant positions. Select a role that excites you, and I'll personalize your LinkedIn profile and interview coaching for that position."} />
 
-                <Card className="p-6">
-                  <h3 className="font-accent text-xl font-semibold mb-4">Recommended Entry-Level Positions</h3>
-                  
-                  <div className="space-y-4">
-                    {[
-                      { title: "Junior Software Developer", company: "TechCorp", location: "San Francisco, CA", salary: "$70k - $90k" },
-                      { title: "Marketing Associate", company: "BrandAgency", location: "New York, NY", salary: "$55k - $70k" },
-                      { title: "Financial Analyst", company: "FinanceGroup", location: "Chicago, IL", salary: "$65k - $80k" },
-                    ].map((job, i) => (
-                      <div key={i} className="flex items-start justify-between p-4 border rounded-lg hover-elevate">
-                        <div className="flex-1">
-                          <h4 className="font-semibold mb-1">{job.title}</h4>
-                          <div className="text-sm text-muted-foreground space-y-1">
-                            <div className="flex items-center gap-2">
-                              <Briefcase className="h-3 w-3" />
-                              {job.company}
+                {!selectedJob && (
+                  <Card className="p-6">
+                    <h3 className="font-accent text-xl font-semibold mb-4">Find Your Target Role</h3>
+
+                    <div className="mb-6">
+                      <Label htmlFor="job-search" className="text-base font-semibold mb-2">Search Jobs</Label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                        <Input
+                          id="job-search"
+                          placeholder="Search by job title, company, skill, or location (e.g., 'React', 'Software Developer', 'Remote')"
+                          value={jobSearchQuery}
+                          onChange={(e) => setJobSearchQuery(e.target.value)}
+                          className="pl-10"
+                          data-testid="input-job-search"
+                        />
+                      </div>
+                    </div>
+
+                    {jobSearchQuery.length > 0 && (
+                      <div className="mb-6 p-4 border rounded-lg bg-accent/20">
+                        <h4 className="font-semibold mb-4">Filter Results</h4>
+
+                        <div className="grid md:grid-cols-3 gap-4">
+                          {/* Job Type Filter */}
+                          <div>
+                            <Label className="text-sm font-semibold mb-2 block">Job Type</Label>
+                            <div className="space-y-2">
+                              {(['remote', 'onsite', 'hybrid'] as const).map((type) => (
+                                <label key={type} className="flex items-center gap-2 cursor-pointer">
+                                  <input
+                                    type="radio"
+                                    name="jobType"
+                                    value={type}
+                                    checked={jobTypeFilter === type}
+                                    onChange={(e) => setJobTypeFilter(e.target.value as "remote" | "onsite" | "hybrid")}
+                                    className="w-4 h-4"
+                                  />
+                                  <span className="text-sm capitalize">{type}</span>
+                                </label>
+                              ))}
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="jobType"
+                                  checked={jobTypeFilter === null}
+                                  onChange={() => setJobTypeFilter(null)}
+                                  className="w-4 h-4"
+                                />
+                                <span className="text-sm">All Types</span>
+                              </label>
                             </div>
-                            <div>{job.location} • {job.salary}</div>
+                          </div>
+
+                          {/* Location Filter */}
+                          <div>
+                            <Label htmlFor="location-filter" className="text-sm font-semibold mb-2 block">Location</Label>
+                            <Input
+                              id="location-filter"
+                              placeholder="e.g., 'San Francisco', 'UK'"
+                              value={locationFilter}
+                              onChange={(e) => setLocationFilter(e.target.value)}
+                              className="text-sm"
+                              data-testid="input-location-filter"
+                            />
+                          </div>
+
+                          {/* Salary Range Filter */}
+                          <div>
+                            <Label className="text-sm font-semibold mb-2 block">Salary Range (K)</Label>
+                            <div className="flex gap-2">
+                              <Input
+                                type="number"
+                                placeholder="Min"
+                                value={salaryMinFilter}
+                                onChange={(e) => setSalaryMinFilter(e.target.value)}
+                                className="text-sm"
+                                data-testid="input-salary-min"
+                              />
+                              <Input
+                                type="number"
+                                placeholder="Max"
+                                value={salaryMaxFilter}
+                                onChange={(e) => setSalaryMaxFilter(e.target.value)}
+                                className="text-sm"
+                                data-testid="input-salary-max"
+                              />
+                            </div>
                           </div>
                         </div>
-                        <Button variant="outline" size="sm" data-testid={`button-view-job-${i}`}>View Details</Button>
+
+                        {/* Clear Filters Button */}
+                        {(jobTypeFilter || locationFilter || salaryMinFilter || salaryMaxFilter) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setJobTypeFilter(null);
+                              setLocationFilter("");
+                              setSalaryMinFilter("");
+                              setSalaryMaxFilter("");
+                            }}
+                            className="mt-4 text-xs"
+                            data-testid="button-clear-filters"
+                          >
+                            Clear Filters
+                          </Button>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                </Card>
+                    )}
+
+                    {jobSearchQuery.length > 0 && (
+                      <div className="space-y-4">
+                        {isSearching && (
+                          <div className="text-center py-8">
+                            <Loader className="h-6 w-6 animate-spin mx-auto mb-2" style={{ color: PATH_COLOR }} />
+                            <p className="text-sm text-muted-foreground">Searching real jobs from LinkedIn, Indeed, Glassdoor & more...</p>
+                          </div>
+                        )}
+
+                        {!isSearching && searchResults.length === 0 && (
+                          <div className="text-center py-8">
+                            {backendMessage ? (
+                              <div className="space-y-2">
+                                <p className="text-muted-foreground">{backendMessage}</p>
+                                <p className="text-sm text-muted-foreground">Try a different search or check back later.</p>
+                              </div>
+                            ) : (
+                              <p className="text-muted-foreground">No jobs found for "{jobSearchQuery}". Try different keywords.</p>
+                            )}
+                          </div>
+                        )}
+
+                        {!isSearching && searchResults.length > 0 && (
+                          <>
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="text-sm text-muted-foreground">Found {searchResults.length} job(s) {usesExternalAPI && <span className="text-xs ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded">Real Job Postings</span>}</p>
+                            </div>
+                            {searchResults.map((job, i) => {
+                              // Extract apply URL from keywords
+                              const applyUrlKeyword = job.keywords?.find(k => k?.startsWith('apply_url:'));
+                              const applyUrl = applyUrlKeyword?.replace('apply_url:', '');
+
+                              return (
+                                <div key={i} className="flex items-start justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors cursor-pointer">
+                                  <div className="flex-1" onClick={() => setSelectedJob({ title: job.title, company: job.company, location: job.location, salary: job.salaryRange || '$0', applyUrl })}>
+                                    <h4 className="font-semibold mb-1">{job.title}</h4>
+                                    <div className="text-sm text-muted-foreground space-y-1">
+                                      <div className="flex items-center gap-2">
+                                        <Briefcase className="h-3 w-3" />
+                                        {job.company}
+                                      </div>
+                                      <div className="text-xs">{job.location} • {job.salaryRange}</div>
+                                      <p className="text-xs line-clamp-2 mt-1">{job.description}</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-col gap-2 ml-4">
+                                    <Button
+                                      size="sm"
+                                      style={{ backgroundColor: PATH_COLOR }}
+                                      data-testid={`button-select-job-${i}`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedJob({ title: job.title, company: job.company, location: job.location, salary: job.salaryRange || '$0', applyUrl });
+                                      }}
+                                    >
+                                      Select
+                                    </Button>
+                                    {applyUrl && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          window.open(applyUrl, '_blank');
+                                        }}
+                                      >
+                                        Apply Now
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </>
+                        )}
+
+                        {jobSearchQuery.length === 0 && (
+                          <div className="text-center py-8 text-muted-foreground">
+                            <p>Start typing to search for jobs...</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {jobSearchQuery.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <p className="mb-2">Try searching for:</p>
+                        <div className="flex flex-wrap gap-2 justify-center">
+                          {["React", "Junior Developer", "Remote", "Python", "Product Manager"].map((suggestion, i) => (
+                            <Button
+                              key={i}
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setJobSearchQuery(suggestion)}
+                              className="text-xs"
+                            >
+                              {suggestion}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </Card>
+                )}
+
+                {selectedJob && (
+                  <Card className="p-6 bg-accent/30 border-2" style={{ borderColor: PATH_COLOR }}>
+                    <h3 className="font-accent text-xl font-semibold mb-4">Your Target Role</h3>
+
+                    <div className="p-4 border rounded-lg bg-background">
+                      <h4 className="font-semibold mb-1 text-lg">{selectedJob.title}</h4>
+                      <div className="text-sm text-muted-foreground space-y-1 mb-4">
+                        <div className="flex items-center gap-2">
+                          <Briefcase className="h-3 w-3" />
+                          {selectedJob.company}
+                        </div>
+                        <div>{selectedJob.location} • {selectedJob.salary}</div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedJob(null);
+                            setJobSearchQuery("");
+                          }}
+                          className="text-xs"
+                        >
+                          Change Selection
+                        </Button>
+                        {selectedJob.applyUrl && (
+                          <Button
+                            size="sm"
+                            style={{ backgroundColor: PATH_COLOR }}
+                            onClick={() => window.open(selectedJob.applyUrl, '_blank')}
+                            className="text-xs"
+                          >
+                            Apply Now →
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                )}
 
                 <div className="flex justify-end">
-                  <Button 
+                  <Button
                     onClick={() => setCurrentModule('skill-discovery')}
                     style={{ backgroundColor: PATH_COLOR }}
                     data-testid="button-continue-to-skill-discovery"
+                    disabled={!selectedJob}
                   >
                     Continue to Skill Discovery
                     <ArrowRight className="ml-2 h-4 w-4" />
@@ -282,52 +561,139 @@ export default function CollegeGradPath() {
                   <div className="grid md:grid-cols-2 gap-4 mb-6">
                     <div>
                       <Label htmlFor="name">Full Name</Label>
-                      <Input id="name" placeholder="John Doe" data-testid="input-name" />
+                      <Input
+                        id="name"
+                        placeholder="John Doe"
+                        value={resumeFormData.fullName}
+                        onChange={(e) => setResumeFormData({...resumeFormData, fullName: e.target.value})}
+                        data-testid="input-name"
+                      />
                     </div>
                     <div>
                       <Label htmlFor="email">Email</Label>
-                      <Input id="email" type="email" placeholder="john@example.com" data-testid="input-email" />
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="john@example.com"
+                        value={resumeFormData.email}
+                        onChange={(e) => setResumeFormData({...resumeFormData, email: e.target.value})}
+                        data-testid="input-email"
+                      />
                     </div>
                     <div>
                       <Label htmlFor="phone">Phone</Label>
-                      <Input id="phone" placeholder="(555) 123-4567" data-testid="input-phone" />
+                      <Input
+                        id="phone"
+                        placeholder="(555) 123-4567"
+                        value={resumeFormData.phone}
+                        onChange={(e) => setResumeFormData({...resumeFormData, phone: e.target.value})}
+                        data-testid="input-phone"
+                      />
                     </div>
                     <div>
                       <Label htmlFor="location">Location</Label>
-                      <Input id="location" placeholder="San Francisco, CA" data-testid="input-location" />
+                      <Input
+                        id="location"
+                        placeholder="San Francisco, CA"
+                        value={resumeFormData.location}
+                        onChange={(e) => setResumeFormData({...resumeFormData, location: e.target.value})}
+                        data-testid="input-location"
+                      />
                     </div>
                   </div>
 
                   <div className="mb-6">
                     <Label>Professional Summary</Label>
-                    <Textarea 
+                    <Textarea
                       className="min-h-24"
                       placeholder="AI will generate this based on your skill map..."
-                      defaultValue="Recent computer science graduate with hands-on experience in full-stack development and a proven track record of leading successful team projects."
+                      defaultValue={skillMap?.brandStatement || ""}
+                      readOnly
                       data-testid="input-summary"
                     />
                   </div>
 
-                  <Button 
+                  <Button
                     className="w-full"
                     style={{ backgroundColor: PATH_COLOR }}
                     data-testid="button-generate-resume"
+                    onClick={handleGenerateResume}
+                    disabled={createResume.isPending || !resumeFormData.fullName.trim() || !resumeFormData.email.trim()}
                   >
-                    <Download className="mr-2 h-4 w-4" />
-                    Generate Resume (PDF/DOCX)
+                    {createResume.isPending ? (
+                      <>
+                        <Loader className="mr-2 h-4 w-4 animate-spin" />
+                        Generating Resume...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="mr-2 h-4 w-4" />
+                        Generate Resume
+                      </>
+                    )}
                   </Button>
                 </Card>
 
-                <div className="flex justify-end">
-                  <Button 
-                    onClick={() => setCurrentModule('ats-optimization')}
-                    style={{ backgroundColor: PATH_COLOR }}
-                    data-testid="button-run-ats-scan"
-                  >
-                    Run ATS Scan
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </div>
+                {resume && (
+                  <Card className="p-6">
+                    <h3 className="font-accent text-xl font-semibold mb-4">Your Generated Resume</h3>
+
+                    <div className="space-y-4 mb-6">
+                      <div>
+                        <h4 className="font-semibold text-lg">{resume.content?.summary}</h4>
+                      </div>
+
+                      {Array.isArray(resume.content?.experience) && resume.content.experience.length > 0 && (
+                        <div>
+                          <h4 className="font-semibold mb-3">Experience</h4>
+                          {resume.content.experience.map((exp: any, i: number) => (
+                            <div key={i} className="mb-4 pb-4 border-b last:border-b-0">
+                              <div className="flex justify-between">
+                                <h5 className="font-semibold">{exp.title}</h5>
+                                <span className="text-sm text-muted-foreground">{exp.duration}</span>
+                              </div>
+                              <p className="text-sm text-muted-foreground mb-2">{exp.company}</p>
+                              <ul className="text-sm space-y-1 ml-4">
+                                {Array.isArray(exp.bullets) && exp.bullets.map((bullet: string, j: number) => (
+                                  <li key={j}>• {bullet}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {Array.isArray(resume.content?.skills) && resume.content.skills.length > 0 && (
+                        <div>
+                          <h4 className="font-semibold mb-3">Skills</h4>
+                          <SkillTagCloud
+                            skills={resume.content.skills}
+                            pathColor={PATH_COLOR}
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="p-4 bg-accent/30 rounded-lg mb-6">
+                      <p className="text-sm text-muted-foreground">
+                        💡 You can now download this resume as PDF or DOCX from the buttons below, or continue to optimize it with ATS scanning.
+                      </p>
+                    </div>
+                  </Card>
+                )}
+
+                {resume && (
+                  <div className="flex justify-end gap-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => setCurrentModule('ats-optimization')}
+                      data-testid="button-run-ats-scan"
+                    >
+                      Run ATS Scan
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -396,20 +762,32 @@ export default function CollegeGradPath() {
             {/* LinkedIn Optimizer Module */}
             {currentModule === 'linkedin-optimizer' && (
               <div className="space-y-6">
-                <AiChatBubble message="I'll help you create a compelling LinkedIn profile that translates your student work into impact language. You can copy and paste these sections directly into LinkedIn." />
+                <AiChatBubble message={selectedJob ? `I'll help you optimize your LinkedIn profile to stand out for the ${selectedJob.title} role at ${selectedJob.company}. You can copy and paste these sections directly into LinkedIn.` : "I'll help you create a compelling LinkedIn profile that translates your student work into impact language. You can copy and paste these sections directly into LinkedIn."} />
+
+                {selectedJob && (
+                  <Card className="p-4 bg-blue-50 border-l-4" style={{ borderLeftColor: PATH_COLOR }}>
+                    <p className="text-sm font-medium">
+                      <strong>Target Role:</strong> {selectedJob.title} at {selectedJob.company}
+                    </p>
+                  </Card>
+                )}
 
                 <Card className="p-6">
                   <h3 className="font-accent text-xl font-semibold mb-6">LinkedIn Profile Optimizer</h3>
-                  
+
                   <div className="space-y-6">
                     {[
-                      { 
-                        title: "Headline", 
-                        content: "Computer Science Graduate | Full-Stack Developer | Passionate About Building User-Centered Solutions" 
+                      {
+                        title: "Headline",
+                        content: selectedJob
+                          ? `${selectedJob.title} | Computer Science Graduate | Full-Stack Developer | Passionate About Building User-Centered Solutions`
+                          : "Computer Science Graduate | Full-Stack Developer | Passionate About Building User-Centered Solutions"
                       },
-                      { 
-                        title: "About Section", 
-                        content: "I'm a recent computer science graduate with a passion for creating elegant solutions to complex problems. Through my coursework and hands-on projects, I've developed expertise in full-stack development, with a particular focus on React and Python.\n\nHighlights:\n• Led a team of 4 to build an award-winning mobile app\n• Completed 3 internships in software development\n• Active contributor to open-source projects\n\nI'm excited to bring my technical skills and collaborative mindset to a dynamic development team." 
+                      {
+                        title: "About Section",
+                        content: selectedJob
+                          ? `I'm a recent computer science graduate seeking opportunities as a ${selectedJob.title} at forward-thinking companies like ${selectedJob.company}. Through my coursework and hands-on projects, I've developed expertise directly relevant to this role.\n\nKey Qualifications:\n• Full-stack development skills with React and Python\n• Experience building scalable solutions\n• Led a team of 4 to build an award-winning mobile app\n• Completed 3 internships gaining practical industry experience\n• Active contributor to open-source projects\n\nI'm excited to bring my technical skills, attention to detail, and collaborative mindset to contribute meaningfully to the ${selectedJob.company} team.`
+                          : "I'm a recent computer science graduate with a passion for creating elegant solutions to complex problems. Through my coursework and hands-on projects, I've developed expertise in full-stack development, with a particular focus on React and Python.\n\nHighlights:\n• Led a team of 4 to build an award-winning mobile app\n• Completed 3 internships in software development\n• Active contributor to open-source projects\n\nI'm excited to bring my technical skills and collaborative mindset to a dynamic development team."
                       },
                     ].map((section, i) => (
                       <div key={i} className="border rounded-lg p-4">
@@ -441,7 +819,7 @@ export default function CollegeGradPath() {
                 </Card>
 
                 <div className="flex justify-end">
-                  <Button 
+                  <Button
                     onClick={() => setCurrentModule('interview-coach')}
                     style={{ backgroundColor: PATH_COLOR }}
                     data-testid="button-interview-practice"
@@ -456,27 +834,35 @@ export default function CollegeGradPath() {
             {/* Interview Coach Module */}
             {currentModule === 'interview-coach' && (
               <div className="space-y-6">
-                <AiChatBubble message="Let's practice common interview questions using the STAR method (Situation, Task, Action, Result). I'll give you feedback on your responses." />
+                <AiChatBubble message={selectedJob ? `Let's practice for your ${selectedJob.title} interview at ${selectedJob.company}! I'll ask you role-specific questions using the STAR method (Situation, Task, Action, Result) and give you personalized feedback.` : "Let's practice common interview questions using the STAR method (Situation, Task, Action, Result). I'll give you feedback on your responses."} />
+
+                {selectedJob && (
+                  <Card className="p-4 bg-blue-50 border-l-4" style={{ borderLeftColor: PATH_COLOR }}>
+                    <p className="text-sm font-medium">
+                      <strong>Interview Practice for:</strong> {selectedJob.title} at {selectedJob.company}
+                    </p>
+                  </Card>
+                )}
 
                 <Card className="p-6">
                   <h3 className="font-accent text-xl font-semibold mb-4">Interview Practice</h3>
-                  
+
                   <div className="space-y-6">
                     <div className="p-4 bg-accent rounded-lg">
                       <p className="font-semibold mb-2">Question:</p>
-                      <p>"Tell me about a time when you had to work on a team project with conflicting ideas."</p>
+                      <p>{selectedJob ? `"Tell me about a project where you successfully delivered results relevant to ${selectedJob.title} responsibilities. How did you ensure quality and meet deadlines?"` : "\"Tell me about a time when you had to work on a team project with conflicting ideas.\""}</p>
                     </div>
 
                     <div>
                       <Label>Your Answer</Label>
-                      <Textarea 
+                      <Textarea
                         className="min-h-32"
                         placeholder="Use the STAR method: Situation, Task, Action, Result..."
                         data-testid="input-interview-answer"
                       />
                     </div>
 
-                    <Button 
+                    <Button
                       variant="outline"
                       className="w-full"
                       data-testid="button-get-feedback"
@@ -497,7 +883,11 @@ export default function CollegeGradPath() {
                         </div>
                         <div className="flex items-start gap-2">
                           <span className="h-4 w-4 text-path-starter mt-0.5">⚠</span>
-                          <span>Consider adding more specific metrics to your result</span>
+                          <span>
+                            {selectedJob
+                              ? `Great! For the ${selectedJob.title} role, emphasize how your solution aligns with ${selectedJob.company}'s needs. Add specific metrics to strengthen your result.`
+                              : "Consider adding more specific metrics to your result"}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -505,7 +895,7 @@ export default function CollegeGradPath() {
                 </Card>
 
                 <div className="flex justify-end">
-                  <Button 
+                  <Button
                     onClick={() => setCurrentModule('document-writer')}
                     style={{ backgroundColor: PATH_COLOR }}
                     data-testid="button-view-dashboard"
