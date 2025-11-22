@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import * as aiService from "./ai-service";
 import * as authService from "./auth-service";
 import * as documentExporter from "./document-export-service";
+import * as joobleService from "./jooble-service";
 import { z } from "zod";
 import { insertSkillMapSchema, insertResumeSchema, insertAtsAnalysisSchema, insertLinkedinProfileSchema, insertInterviewSessionSchema, insertDocumentSchema } from "@shared/schema";
 import { Readable } from "stream";
@@ -285,6 +286,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(skillMap);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ==================== JOB LISTINGS ROUTES ====================
+
+  // Search jobs from Jooble
+  app.post("/api/jobs/jooble-search", async (req, res) => {
+    try {
+      const { keyword, location, salary_min, job_type, posted_date } = req.body;
+
+      if (!keyword || !location) {
+        return res.status(400).json({ error: "Keyword and location are required" });
+      }
+
+      const jobs = await joobleService.searchJoobleJobs({
+        keyword,
+        location,
+        salary_min,
+        job_type,
+        posted_date,
+      });
+
+      const convertedJobs = jobs.map(joobleService.convertJoobleToStandard);
+
+      res.json({
+        source: "jooble",
+        query: keyword,
+        location,
+        count: convertedJobs.length,
+        jobs: convertedJobs,
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        error: error.message || "Failed to search Jooble jobs",
+        message: "Job search service is temporarily unavailable. Please try again later or search on LinkedIn.",
+      });
     }
   });
 
