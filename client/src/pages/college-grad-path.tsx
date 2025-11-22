@@ -9,7 +9,7 @@ import { AiChatBubble } from "@/components/shared/ai-chat-bubble";
 import { ModuleHeader } from "@/components/shared/module-header";
 import { SkillTagCloud } from "@/components/shared/skill-tag-cloud";
 import { AtsScoreDisplay } from "@/components/shared/ats-score-display";
-import { ArrowRight, Download, Copy, Check, FileText, Target, MessageSquare, Loader, Upload, X } from "lucide-react";
+import { ArrowRight, Download, Copy, Check, FileText, Target, MessageSquare, Loader, Upload, X, Briefcase, MapPin, DollarSign, ExternalLink } from "lucide-react";
 import type { ModuleType, SkillMap, Resume } from "@shared/schema";
 import { useCreateSkillMap, useCreateResume } from "@/lib/api-hooks";
 import { useSession } from "@/contexts/session-context";
@@ -29,6 +29,15 @@ export default function CollegeGradPath() {
   const [existingResume, setExistingResume] = useState("");
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [resumeStep, setResumeStep] = useState<"input" | "form">("input");
+
+  // Job search state
+  const [jobKeyword, setJobKeyword] = useState("");
+  const [jobLocation, setJobLocation] = useState("");
+  const [jobSalaryMin, setJobSalaryMin] = useState("");
+  const [jobType, setJobType] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
 
   const createSkillMap = useCreateSkillMap();
   const createResume = useCreateResume();
@@ -64,6 +73,44 @@ export default function CollegeGradPath() {
     }
   };
 
+  const handleSearchJobs = async () => {
+    if (!jobKeyword.trim() || !jobLocation.trim()) {
+      setSearchError("Please enter job title and location");
+      return;
+    }
+
+    setIsSearching(true);
+    setSearchError("");
+    setSearchResults([]);
+
+    try {
+      const response = await fetch("/api/jobs/jooble-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          keyword: jobKeyword,
+          location: jobLocation,
+          salary_min: jobSalaryMin || undefined,
+          job_type: jobType || undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        setSearchError(error.message || "Failed to search jobs");
+        return;
+      }
+
+      const data = await response.json();
+      setSearchResults(data.jobs || []);
+    } catch (error) {
+      setSearchError("Error searching jobs. Please try again.");
+      console.error("Job search error:", error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
   const modules = [
     { id: 'welcome' as ModuleType, title: 'Welcome', completed: false, active: currentModule === 'welcome' },
     { id: 'skill-discovery' as ModuleType, title: 'Skill Discovery & Career Mapping', completed: false, active: currentModule === 'skill-discovery' },
@@ -72,6 +119,7 @@ export default function CollegeGradPath() {
     { id: 'linkedin-optimizer' as ModuleType, title: 'LinkedIn Profile Optimizer', completed: false, active: currentModule === 'linkedin-optimizer' },
     { id: 'interview-coach' as ModuleType, title: 'Interview Coach', completed: false, active: currentModule === 'interview-coach' },
     { id: 'document-writer' as ModuleType, title: 'AI Document Writer', completed: false, active: currentModule === 'document-writer' },
+    { id: 'job-search' as ModuleType, title: 'Job Search & Apply', completed: false, active: currentModule === 'job-search' },
   ];
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -673,7 +721,7 @@ export default function CollegeGradPath() {
 
                 <Card className="p-6">
                   <h3 className="font-accent text-xl font-semibold mb-6">AI Document Writer</h3>
-                  
+
                   <div className="grid md:grid-cols-3 gap-4 mb-6">
                     {[
                       { title: "Cover Letter", desc: "Customized for each application" },
@@ -697,7 +745,7 @@ export default function CollegeGradPath() {
                       <Label>Position</Label>
                       <Input placeholder="e.g., Junior Software Developer" data-testid="input-position" />
                     </div>
-                    <Button 
+                    <Button
                       className="w-full"
                       style={{ backgroundColor: PATH_COLOR }}
                       data-testid="button-generate-letter"
@@ -706,6 +754,156 @@ export default function CollegeGradPath() {
                     </Button>
                   </div>
                 </Card>
+
+                <div className="flex justify-end">
+                  <Button
+                    onClick={() => setCurrentModule('job-search')}
+                    style={{ backgroundColor: PATH_COLOR }}
+                  >
+                    Find Jobs to Apply
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Job Search Module */}
+            {currentModule === 'job-search' && (
+              <div className="space-y-6">
+                <AiChatBubble message="Ready to find your next opportunity? Search jobs from Jooble's database and apply with your customized resume and cover letter." />
+
+                <Card className="p-8">
+                  <h3 className="font-accent text-2xl font-semibold mb-6">Job Search & Apply</h3>
+
+                  <div className="grid md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                      <Label htmlFor="job-keyword">Job Title or Keywords</Label>
+                      <Input
+                        id="job-keyword"
+                        placeholder="e.g., Software Developer, Frontend Engineer"
+                        value={jobKeyword}
+                        onChange={(e) => setJobKeyword(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="job-location">Location</Label>
+                      <Input
+                        id="job-location"
+                        placeholder="e.g., San Francisco, CA or Remote"
+                        value={jobLocation}
+                        onChange={(e) => setJobLocation(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="job-salary">Minimum Salary (Optional)</Label>
+                      <Input
+                        id="job-salary"
+                        placeholder="e.g., 80000"
+                        value={jobSalaryMin}
+                        onChange={(e) => setJobSalaryMin(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="job-type">Job Type (Optional)</Label>
+                      <Input
+                        id="job-type"
+                        placeholder="e.g., full-time, part-time, contract"
+                        value={jobType}
+                        onChange={(e) => setJobType(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  {searchError && (
+                    <div className="p-4 bg-destructive/10 border border-destructive rounded-lg mb-6">
+                      <p className="text-sm text-destructive">{searchError}</p>
+                    </div>
+                  )}
+
+                  <Button
+                    className="w-full"
+                    style={{ backgroundColor: PATH_COLOR }}
+                    onClick={handleSearchJobs}
+                    disabled={isSearching}
+                  >
+                    {isSearching ? (
+                      <>
+                        <Loader className="mr-2 h-4 w-4 animate-spin" />
+                        Searching Jobs...
+                      </>
+                    ) : (
+                      <>
+                        <Briefcase className="mr-2 h-4 w-4" />
+                        Search Jobs
+                      </>
+                    )}
+                  </Button>
+                </Card>
+
+                {searchResults.length > 0 && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-semibold text-lg">Found {searchResults.length} Jobs</h4>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSearchResults([])}
+                      >
+                        Clear Results
+                      </Button>
+                    </div>
+
+                    {searchResults.map((job, index) => (
+                      <Card key={index} className="p-6 hover:shadow-md transition-shadow">
+                        <div className="flex flex-col md:flex-row justify-between md:items-start gap-4 mb-4">
+                          <div className="flex-1">
+                            <h5 className="font-semibold text-lg mb-2">{job.title}</h5>
+                            <p className="text-muted-foreground font-medium mb-3">{job.company}</p>
+
+                            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                              <div className="flex items-center gap-2">
+                                <MapPin className="h-4 w-4" />
+                                {job.location}
+                              </div>
+                              {job.salary && (
+                                <div className="flex items-center gap-2">
+                                  <DollarSign className="h-4 w-4" />
+                                  {job.salary}
+                                </div>
+                              )}
+                              {job.dateCaption && (
+                                <div className="text-xs bg-accent px-2 py-1 rounded">
+                                  {job.dateCaption}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <Button
+                            onClick={() => window.open(job.url, '_blank')}
+                            className="whitespace-nowrap"
+                            style={{ backgroundColor: PATH_COLOR }}
+                          >
+                            <ExternalLink className="h-4 w-4 mr-2" />
+                            View Job
+                          </Button>
+                        </div>
+
+                        {job.description && (
+                          <div className="text-sm text-muted-foreground line-clamp-2 bg-accent/30 p-3 rounded mt-3">
+                            {job.description}
+                          </div>
+                        )}
+                      </Card>
+                    ))}
+                  </div>
+                )}
+
+                {searchResults.length === 0 && !isSearching && !searchError && (
+                  <Card className="p-8 text-center">
+                    <Briefcase className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground">Search for jobs to get started</p>
+                  </Card>
+                )}
               </div>
             )}
           </main>

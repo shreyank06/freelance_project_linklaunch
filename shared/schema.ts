@@ -241,7 +241,7 @@ export type InsertJobListing = z.infer<typeof insertJobListingSchema>;
 export type PathType = 'college' | 'professional' | 'starter';
 
 // Module progression enum
-export type ModuleType = 
+export type ModuleType =
   | 'welcome'
   | 'job-listings'
   | 'skill-discovery'
@@ -249,4 +249,5 @@ export type ModuleType =
   | 'ats-optimization'
   | 'linkedin-optimizer'
   | 'interview-coach'
-  | 'document-writer';
+  | 'document-writer'
+  | 'job-search';
