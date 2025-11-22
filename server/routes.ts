@@ -4,7 +4,6 @@ import { storage } from "./storage";
 import * as aiService from "./ai-service";
 import * as authService from "./auth-service";
 import * as documentExporter from "./document-export-service";
-import * as jobService from "./job-service";
 import { z } from "zod";
 import { insertSkillMapSchema, insertResumeSchema, insertAtsAnalysisSchema, insertLinkedinProfileSchema, insertInterviewSessionSchema, insertDocumentSchema } from "@shared/schema";
 import { Readable } from "stream";
@@ -236,67 +235,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         progress
       );
       res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // ==================== JOB LISTINGS ROUTES ====================
-
-  // Get job listings
-  app.get("/api/jobs", async (req, res) => {
-    try {
-      const { experienceLevel } = req.query;
-      const jobs = await storage.getAllJobListings(experienceLevel as string);
-      res.json(jobs);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Search jobs
-  app.get("/api/jobs/search", async (req, res) => {
-    try {
-      const { q } = req.query;
-      if (!q || typeof q !== "string") {
-        return res.status(400).json({ error: "Search query is required" });
-      }
-      const jobs = await storage.searchJobListings(q);
-      res.json(jobs);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Search real jobs from external APIs (JSearch, RemoteOK, Adzuna)
-  app.get("/api/jobs/external-search", async (req, res) => {
-    try {
-      const { q, jobType, location, salaryMin, salaryMax } = req.query;
-      if (!q || typeof q !== "string") {
-        return res.status(400).json({ error: "Search query is required" });
-      }
-
-      // Build filters object
-      const filters: jobService.JobFilters = {
-        query: q,
-        jobType: (jobType as "remote" | "onsite" | "hybrid") || undefined,
-        location: (location as string) || undefined,
-        salaryMin: salaryMin ? parseInt(salaryMin as string) : undefined,
-        salaryMax: salaryMax ? parseInt(salaryMax as string) : undefined,
-      };
-
-      // Search from external APIs with filters
-      let externalJobs = await jobService.searchExternalJobs(filters);
-
-      // Convert to JobListing format for consistent frontend response
-      const jobs = externalJobs.map(jobService.convertToJobListing);
-
-      res.json({
-        source: "external",
-        query: q,
-        count: jobs.length,
-        jobs,
-      });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
